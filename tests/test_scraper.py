@@ -32,3 +32,49 @@ def test_fetch_html_failure():
         
         with pytest.raises(HTTPError):
             scraper.fetch_html(url)
+
+def test_extract_main_content_basic():
+    scraper = Scraper()
+    html = """
+    <html>
+        <body>
+            <nav>Navigation</nav>
+            <main>
+                <article>
+                    <h1>Title</h1>
+                    <p>Main content here.</p>
+                </article>
+            </main>
+            <footer>Footer</footer>
+        </body>
+    </html>
+    """
+    extracted = scraper.extract_main_content(html)
+    assert "Main content here." in extracted
+    assert "Navigation" not in extracted
+    assert "Footer" not in extracted
+
+def test_extract_main_content_no_main_tag():
+    scraper = Scraper()
+    html = """
+    <html>
+        <body>
+            <div class="nav">Nav</div>
+            <div class="content">
+                <h1>Title</h1>
+                <p>Content in div.content</p>
+            </div>
+            <div class="footer">Foot</div>
+        </body>
+    </html>
+    """
+    extracted = scraper.extract_main_content(html)
+    assert "Content in div.content" in extracted
+    assert "Nav" not in extracted
+    assert "Foot" not in extracted
+
+def test_extract_main_content_no_body():
+    scraper = Scraper()
+    html = "<h1>Minimal</h1>"
+    extracted = scraper.extract_main_content(html)
+    assert "<h1>Minimal</h1>" in extracted
