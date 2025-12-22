@@ -2,10 +2,10 @@
 
 ## Phase 1: Basic CLI Structure
 - [x] Task: Add `click` dependency to `pyproject.toml` 51a53d3
-- [ ] Task: Create `src/md_scraper/cli.py` with a basic `click` command group/command
-    - [ ] Sub-task: Implement a simple `hello` command to verify setup
-    - [ ] Sub-task: Configure `[tool.poetry.scripts]` in `pyproject.toml` to point to the CLI
-- [ ] Task: Conductor - User Manual Verification 'Phase 1: Basic CLI Structure' (Protocol in workflow.md)
+- [x] Task: Create `src/md_scraper/cli.py` with a basic `click` command group/command cca08b3
+    - [x] Sub-task: Implement a simple `hello` command to verify setup
+    - [x] Sub-task: Configure `[tool.poetry.scripts]` in `pyproject.toml` to point to the CLI
+- [x] Task: Conductor - User Manual Verification 'Phase 1: Basic CLI Structure' (Protocol in workflow.md) cca08b3
 
 ## Phase 2: Scrape Command Implementation
 - [ ] Task: Implement the `scrape` command logic in `cli.py`
