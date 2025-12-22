@@ -78,3 +78,92 @@ def test_extract_main_content_no_body():
     html = "<h1>Minimal</h1>"
     extracted = scraper.extract_main_content(html)
     assert "<h1>Minimal</h1>" in extracted
+
+def test_extract_metadata_og():
+    scraper = Scraper()
+    html = """
+    <html>
+        <head>
+            <meta property="og:title" content="OG Title">
+            <meta property="og:description" content="OG Description">
+            <meta name="author" content="OG Author">
+        </head>
+        <body></body>
+    </html>
+    """
+    metadata = scraper.extract_metadata(html)
+    assert metadata['title'] == "OG Title"
+    assert metadata['description'] == "OG Description"
+    assert metadata['author'] == "OG Author"
+
+def test_extract_metadata_standard():
+    scraper = Scraper()
+    html = """
+    <html>
+        <head>
+            <title>Standard Title</title>
+            <meta name="description" content="Standard Description">
+        </head>
+        <body></body>
+    </html>
+    """
+    metadata = scraper.extract_metadata(html)
+    assert metadata['title'] == "Standard Title"
+    assert metadata['description'] == "Standard Description"
+
+def test_extract_metadata_json_ld():
+    scraper = Scraper()
+    html = """
+    <html>
+        <head>
+            <script type="application/ld+json">
+            {
+                "@context": "https://schema.org",
+                "@type": "NewsArticle",
+                "headline": "JSON-LD Title",
+                "datePublished": "2023-10-27T12:00:00Z",
+                "author": {"@type": "Person", "name": "JSON-LD Author"}
+            }
+            </script>
+        </head>
+        <body></body>
+    </html>
+    """
+    metadata = scraper.extract_metadata(html)
+    assert metadata['title'] == "JSON-LD Title"
+    assert metadata['author'] == "JSON-LD Author"
+    assert metadata['date'] == "2023-10-27T12:00:00Z"
+
+def test_extract_metadata_json_ld_list_author():
+    scraper = Scraper()
+    html = """
+    <html>
+        <head>
+            <script type="application/ld+json">
+            {
+                "@context": "https://schema.org",
+                "@type": "NewsArticle",
+                "author": [{"@type": "Person", "name": "Author 1"}, {"@type": "Person", "name": "Author 2"}]
+            }
+            </script>
+        </head>
+        <body></body>
+    </html>
+    """
+    metadata = scraper.extract_metadata(html)
+    assert metadata['author'] == "Author 1"
+
+def test_extract_metadata_invalid_json_ld():
+    scraper = Scraper()
+    html = """
+    <html>
+        <head>
+            <script type="application/ld+json">
+            { invalid json }
+            </script>
+        </head>
+        <body></body>
+    </html>
+    """
+    metadata = scraper.extract_metadata(html)
+    assert metadata['title'] is None
