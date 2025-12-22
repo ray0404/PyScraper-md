@@ -1,7 +1,7 @@
 # Plan: Core Scraper Library
 
 ## Phase 1: Project Initialization & Foundation
-- [ ] Task: Initialize Poetry project and install dependencies (`requests`, `beautifulsoup4`, `markdownify`, `lxml`, `pytest`, `pytest-cov`)
+- [x] Task: Initialize Poetry project and install dependencies (`requests`, `beautifulsoup4`, `markdownify`, `lxml`, `pytest`, `pytest-cov`) ef40ba6
 - [ ] Task: Set up project structure (`src/md_scraper/`, `tests/`)
 - [ ] Task: Create a basic `Scraper` class with a `fetch_html(url)` method
     - [ ] Sub-task: Write tests for `fetch_html` (success and error cases)
