@@ -1,8 +1,0 @@
-{
-  "track_id": "web_ui_flask_20251221",
-  "type": "feature",
-  "status": "new",
-  "created_at": "2025-12-21T21:00:00Z",
-  "updated_at": "2025-12-21T21:00:00Z",
-  "description": "Implement the Web UI using Flask to provide a browser-based interface for scraping URLs and previewing Markdown."
-}
