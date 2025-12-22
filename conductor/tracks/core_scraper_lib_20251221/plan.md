@@ -1,12 +1,12 @@
 # Plan: Core Scraper Library
 
-## Phase 1: Project Initialization & Foundation
+## Phase 1: Project Initialization & Foundation [checkpoint: 6e59b10]
 - [x] Task: Initialize Poetry project and install dependencies (`requests`, `beautifulsoup4`, `markdownify`, `lxml`, `pytest`, `pytest-cov`) ef40ba6
 - [x] Task: Set up project structure (`src/md_scraper/`, `tests/`) 4a7b95f
 - [x] Task: Create a basic `Scraper` class with a `fetch_html(url)` method 68256e7
     - [x] Sub-task: Write tests for `fetch_html` (success and error cases)
     - [x] Sub-task: Implement `fetch_html` using `requests`
-- [ ] Task: Conductor - User Manual Verification 'Phase 1: Project Initialization & Foundation' (Protocol in workflow.md)
+- [x] Task: Conductor - User Manual Verification 'Phase 1: Project Initialization & Foundation' (Protocol in workflow.md) 6e59b10
 
 ## Phase 2: Content Extraction Logic
 - [ ] Task: Implement `extract_main_content(html)` method in `Scraper` class
