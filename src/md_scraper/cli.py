@@ -7,12 +7,30 @@ def cli():
 
 @cli.command()
 @click.argument('url')
-def scrape(url):
+@click.option('--output', '-o', type=click.Path(), help='File path to save the Markdown output.')
+@click.option('--dynamic', '-d', is_flag=True, default=False, help='Enable Playwright-based dynamic scraping.')
+@click.option('--strip', '-s', multiple=True, help='Tags to strip from the output (can be used multiple times).')
+def scrape(url, output, dynamic, strip):
     """Scrape a URL and print the Markdown content."""
     scraper = Scraper()
     try:
-        result = scraper.scrape(url)
-        click.echo(result['markdown'])
+        # Pass options to scrape method
+        # markdownify 'strip' is a list
+        scrape_options = {}
+        if strip:
+            scrape_options['strip'] = list(strip)
+            
+        result = scraper.scrape(url, dynamic=dynamic, **scrape_options)
+        
+        markdown = result['markdown']
+        
+        if output:
+            with open(output, 'w') as f:
+                f.write(markdown)
+            click.echo(f"Successfully scraped {url} to {output}")
+        else:
+            click.echo(markdown)
+            
     except Exception as e:
         click.echo(f"Error: {e}", err=True)
         raise click.Abort()
