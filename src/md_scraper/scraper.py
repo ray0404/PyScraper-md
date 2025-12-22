@@ -1,7 +1,14 @@
 import requests
 import json
+import os
 from bs4 import BeautifulSoup
 from markdownify import markdownify as md
+
+# Try to import playwright, but don't crash if missing
+try:
+    from playwright.sync_api import sync_playwright
+except ImportError:
+    sync_playwright = None
 
 class Scraper:
     """
@@ -27,6 +34,43 @@ class Scraper:
         response = requests.get(url)
         response.raise_for_status()
         return response.text
+
+    def fetch_html_dynamic(self, url: str) -> str:
+        """
+        Fetches the rendered HTML content from a given URL using Playwright.
+        
+        Args:
+            url (str): The URL of the webpage to fetch.
+            
+        Returns:
+            str: The rendered HTML content of the page.
+            
+        Raises:
+            ImportError: If Playwright is not installed.
+            Exception: If browser launch or page navigation fails.
+        """
+        if sync_playwright is None:
+            raise ImportError("Playwright is not installed. Please install it with 'pip install playwright' and 'playwright install'.")
+
+        with sync_playwright() as p:
+            # Check for CHROMIUM_PATH environment variable (useful for Termux/custom setups)
+            executable_path = os.environ.get("CHROMIUM_PATH")
+            launch_args = {
+                "headless": True
+            }
+            if executable_path:
+                launch_args["executable_path"] = executable_path
+                launch_args["args"] = ['--no-sandbox', '--disable-gpu'] # Often needed for custom binaries
+
+            browser = p.chromium.launch(**launch_args)
+            try:
+                page = browser.new_page()
+                page.goto(url)
+                # TODO: Add wait_for_selector or similar logic if needed for specific sites
+                content = page.content()
+                return content
+            finally:
+                browser.close()
 
     def extract_main_content(self, html: str) -> str:
         """
