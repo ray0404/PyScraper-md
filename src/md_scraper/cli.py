@@ -10,13 +10,14 @@ def cli():
 @click.option('--output', '-o', type=click.Path(), help='File path to save the Markdown output.')
 @click.option('--dynamic', '-d', is_flag=True, default=False, help='Enable Playwright-based dynamic scraping.')
 @click.option('--strip', '-s', multiple=True, help='Tags to strip from the output (can be used multiple times).')
-def scrape(url, output, dynamic, strip):
+@click.option('--svg-action', type=click.Choice(['image', 'preserve', 'strip']), default='image', help='Action for inline <svg> tags (default: image).')
+def scrape(url, output, dynamic, strip, svg_action):
     """Scrape a URL and print the Markdown content."""
     scraper = Scraper()
     try:
         # Pass options to scrape method
         # markdownify 'strip' is a list
-        scrape_options = {}
+        scrape_options = {'svg_action': svg_action}
         if strip:
             scrape_options['strip'] = list(strip)
             

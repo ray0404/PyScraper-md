@@ -20,7 +20,7 @@ def test_scrape_command_success():
         
         assert result.exit_code == 0
         assert expected_output in result.output
-        mock_scraper_instance.scrape.assert_called_once_with(url, dynamic=False)
+        mock_scraper_instance.scrape.assert_called_once_with(url, dynamic=False, svg_action='image')
 
 def test_scrape_command_failure():
     runner = CliRunner()
@@ -72,5 +72,22 @@ def test_scrape_command_options_passing():
         mock_scraper_instance.scrape.assert_called_once_with(
             url, 
             dynamic=True, 
-            strip=['a', 'img']
+            strip=['a', 'img'],
+            svg_action='image'
+        )
+
+def test_scrape_command_svg_action_passing():
+    runner = CliRunner()
+    url = "https://example.com"
+    
+    with patch("md_scraper.cli.Scraper") as mock_scraper_class:
+        mock_scraper_instance = mock_scraper_class.return_value
+        mock_scraper_instance.scrape.return_value = {'markdown': "", 'metadata': {}}
+        
+        runner.invoke(cli, ['scrape', url, '--svg-action', 'preserve'])
+        
+        mock_scraper_instance.scrape.assert_called_once_with(
+            url, 
+            dynamic=False, 
+            svg_action='preserve'
         )

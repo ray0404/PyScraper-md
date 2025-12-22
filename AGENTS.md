@@ -64,3 +64,11 @@ We use **Poetry**.
 
 ## ⚠️ Environment Specifics
 - **Termux Support:** The codebase supports Android/Termux via the `CHROMIUM_PATH` environment variable and `--no-sandbox` flags in `Playwright` configuration. If running in a restricted environment, always check for system binary compatibility.
+
+## ☁️ Deployment Info
+
+- **Platform:** Google Cloud Run
+- **Service Name:** `scraper`
+- **Region:** `us-central1`
+- **URL:** `https://scraper-751660269987.us-central1.run.app`
+- **Command:** `gcloud run deploy scraper --source . --region us-central1 --allow-unauthenticated`

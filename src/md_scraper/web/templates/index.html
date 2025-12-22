@@ -33,6 +33,14 @@
                     <input type="checkbox" id="dynamic" name="dynamic" {% if dynamic %}checked{% endif %}>
                     Dynamic Mode (Playwright)
                 </label>
+
+                <label for="svg_action">SVG Handling:
+                    <select id="svg_action" name="svg_action">
+                        <option value="image" {% if svg_action == 'image' %}selected{% endif %}>Convert to Image (Base64)</option>
+                        <option value="preserve" {% if svg_action == 'preserve' %}selected{% endif %}>Preserve as HTML</option>
+                        <option value="strip" {% if svg_action == 'strip' %}selected{% endif %}>Remove Entirely</option>
+                    </select>
+                </label>
             </form>
 
             {% if error %}

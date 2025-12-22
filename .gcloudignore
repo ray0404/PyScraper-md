@@ -1,0 +1,15 @@
+.gcloudignore
+.git
+.gitignore
+__pycache__/
+*.py[cod]
+*$py.class
+.coverage
+htmlcov/
+.pytest_cache/
+.venv/
+conductor/
+GEMINI.md
+AGENTS.md
+tests/
+firebase-debug.log

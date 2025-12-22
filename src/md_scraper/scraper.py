@@ -1,6 +1,7 @@
 import requests
 import json
 import os
+import base64
 from bs4 import BeautifulSoup
 from markdownify import markdownify as md
 
@@ -174,19 +175,50 @@ class Scraper:
         Args:
             html (str): The HTML content to convert.
             **options: Additional options passed to the markdownify library.
+                svg_action (str): Action for inline <svg> tags. 
+                    'image' (default): Convert to base64 image.
+                    'preserve': Keep as raw HTML.
+                    'strip': Remove entirely.
             
         Returns:
             str: The resulting Markdown string.
         """
+        svg_action = options.pop('svg_action', 'image')
+        soup = BeautifulSoup(html, 'lxml')
+
+        placeholders = {}
+        if svg_action == 'strip':
+            for svg in soup.find_all('svg'):
+                svg.decompose()
+        elif svg_action == 'image':
+            for svg in soup.find_all('svg'):
+                svg_str = str(svg)
+                encoded = base64.b64encode(svg_str.encode('utf-8')).decode('utf-8')
+                img_tag = soup.new_tag('img', src=f"data:image/svg+xml;base64,{encoded}", alt="svg image")
+                svg.replace_with(img_tag)
+        elif svg_action == 'preserve':
+            for i, svg in enumerate(soup.find_all('svg')):
+                placeholder = f"MDScraperSVG{i}"
+                placeholders[placeholder] = str(svg)
+                svg.replace_with(placeholder)
+
         # Default options for GFM-like output
         defaults = {
             'heading_style': 'ATX',
             'bullets': '-',
             'code_language_callback': lambda el: el.get('class', [''])[0].replace('language-', '') if el.get('class') else ''
         }
+        
         # Merge with user options
         config = {**defaults, **options}
-        return md(html, **config)
+        markdown = md(str(soup), **config)
+
+        # Restore preserved SVGs
+        if svg_action == 'preserve':
+            for placeholder, svg_content in placeholders.items():
+                markdown = markdown.replace(placeholder, svg_content)
+
+        return markdown
 
     def scrape(self, url: str, dynamic: bool = False, **options) -> dict:
         """

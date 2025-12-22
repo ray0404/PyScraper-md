@@ -75,6 +75,11 @@ poetry run python src/md_scraper/web/app.py
 ```
 Open your browser and navigate to `http://127.0.0.1:5000`.
 
+#### Cloud Deployment
+
+The application is live on Google Cloud Run:
+**[https://scraper-751660269987.us-central1.run.app](https://scraper-751660269987.us-central1.run.app)**
+
 #### As a Python Library
 
 ```python

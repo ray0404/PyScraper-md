@@ -200,11 +200,30 @@ def test_to_markdown_options():
     assert "https://example.com" not in md_no_links
     
     # Strip images
-    md_no_images = scraper.to_markdown(html, strip=['image']) # markdownify uses 'image' or 'img'? I used 'img' in code but test used 'image'. Wait.
-    # Actually markdownify 'strip' takes a list of tags. 'img' is the tag.
     md_no_images = scraper.to_markdown(html, strip=['img'])
     assert "image" not in md_no_images
     assert "this link" in md_no_images
+
+def test_to_markdown_svg_as_image():
+    scraper = Scraper()
+    html = '<svg width="10" height="10"><circle r="5" /></svg>'
+    markdown = scraper.to_markdown(html, svg_action='image')
+    assert "![svg image](data:image/svg+xml;base64," in markdown
+
+def test_to_markdown_svg_preserve():
+    scraper = Scraper()
+    html = '<svg width="10" height="10"><circle r="5" /></svg>'
+    markdown = scraper.to_markdown(html, svg_action='preserve')
+    assert "<svg" in markdown
+    assert "<circle" in markdown
+
+def test_to_markdown_svg_strip():
+    scraper = Scraper()
+    html = '<p>Text</p><svg width="10" height="10"><circle r="5" /></svg>'
+    markdown = scraper.to_markdown(html, svg_action='strip')
+    assert "<svg" not in markdown
+    assert "Text" in markdown
+
 
 def test_scrape_orchestration():
     scraper = Scraper()
