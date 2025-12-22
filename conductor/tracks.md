@@ -4,7 +4,8 @@ This file tracks all major tracks for the project. Each track has its own detail
 
 ---
 
-## [~] Track: Implement the CLI Tool using Click to allow users to scrape URLs directly from the terminal.
-*Link: [./conductor/tracks/cli_tool_click_20251221/](./conductor/tracks/cli_tool_click_20251221/)*
+## [~] Track: Implement the Web UI using Flask to provide a browser-based interface for scraping URLs and previewing Markdown.
+*Link: [./conductor/tracks/web_ui_flask_20251221/](./conductor/tracks/web_ui_flask_20251221/)*
+
 
 
