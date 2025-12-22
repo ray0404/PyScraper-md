@@ -2,7 +2,7 @@
 
 ## Phase 1: Project Initialization & Foundation
 - [x] Task: Initialize Poetry project and install dependencies (`requests`, `beautifulsoup4`, `markdownify`, `lxml`, `pytest`, `pytest-cov`) ef40ba6
-- [ ] Task: Set up project structure (`src/md_scraper/`, `tests/`)
+- [x] Task: Set up project structure (`src/md_scraper/`, `tests/`) 4a7b95f
 - [ ] Task: Create a basic `Scraper` class with a `fetch_html(url)` method
     - [ ] Sub-task: Write tests for `fetch_html` (success and error cases)
     - [ ] Sub-task: Implement `fetch_html` using `requests`
