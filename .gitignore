@@ -156,5 +156,15 @@ cython_debug/
 .vscode/
 
 # OS specific
+
 .DS_Store
+
 Thumbs.db
+
+
+
+# Project specific
+
+conductor/
+
+GEMINI.md
