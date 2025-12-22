@@ -12,9 +12,9 @@
 - [x] Task: Implement `extract_main_content(html)` method in `Scraper` class 2ca6e56
     - [x] Sub-task: Write tests with mock HTML containing boilerplate
     - [x] Sub-task: Implement basic heuristics to identify the main article tag (e.g., `<article>`, `.content`, `#main`)
-- [ ] Task: Implement `extract_metadata(html)` method
-    - [ ] Sub-task: Write tests for title, author, and date extraction
-    - [ ] Sub-task: Implement metadata extraction from `<meta>` tags and OpenGraph data
+- [x] Task: Implement `extract_metadata(html)` method 1715789
+    - [x] Sub-task: Write tests for title, author, and date extraction
+    - [x] Sub-task: Implement metadata extraction from `<meta>` tags and OpenGraph data
 - [ ] Task: Conductor - User Manual Verification 'Phase 2: Content Extraction Logic' (Protocol in workflow.md)
 
 ## Phase 3: Markdown Conversion
