@@ -91,3 +91,19 @@ class Scraper:
         # Merge with user options
         config = {**defaults, **options}
         return md(html, **config)
+
+    def scrape(self, url: str, **options) -> dict:
+        """
+        Full orchestration: fetch -> extract -> convert.
+        """
+        html = self.fetch_html(url)
+        metadata = self.extract_metadata(html)
+        main_html = self.extract_main_content(html)
+        markdown = self.to_markdown(main_html, **options)
+        
+        return {
+            'url': url,
+            'metadata': metadata,
+            'markdown': markdown,
+            'raw_html': html
+        }

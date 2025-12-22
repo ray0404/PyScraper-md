@@ -200,6 +200,49 @@ def test_to_markdown_options():
     assert "https://example.com" not in md_no_links
     
     # Strip images
+    md_no_images = scraper.to_markdown(html, strip=['image']) # markdownify uses 'image' or 'img'? I used 'img' in code but test used 'image'. Wait.
+    # Actually markdownify 'strip' takes a list of tags. 'img' is the tag.
     md_no_images = scraper.to_markdown(html, strip=['img'])
     assert "image" not in md_no_images
     assert "this link" in md_no_images
+
+def test_scrape_orchestration():
+    scraper = Scraper()
+    url = "https://example.com/article"
+    html = """
+    <html>
+        <head><title>Test Article</title></head>
+        <body>
+            <main>
+                <h1>Test Article</h1>
+                <p>Content.</p>
+            </main>
+        </body>
+    </html>
+    """
+    
+    with patch.object(Scraper, 'fetch_html', return_value=html):
+        result = scraper.scrape(url)
+        
+        assert result['metadata']['title'] == "Test Article"
+        assert "# Test Article" in result['markdown']
+        assert "Content." in result['markdown']
+        assert result['url'] == url
+
+def test_scrape_integration_sample():
+    scraper = Scraper()
+    with open('tests/samples/blog_post.html', 'r') as f:
+        html = f.read()
+    
+    url = "https://example.com/blog/sample"
+    with patch.object(Scraper, 'fetch_html', return_value=html):
+        result = scraper.scrape(url)
+        
+        assert result['metadata']['title'] == "Sample Blog Post"
+        assert result['metadata']['author'] == "John Doe"
+        assert "This is the **main content**" in result['markdown']
+        assert "## Subheading" in result['markdown']
+        assert "- Item 1" in result['markdown']
+        # Boilerplate should be gone
+        assert "Home" not in result['markdown']
+        assert "&copy;" not in result['markdown']
