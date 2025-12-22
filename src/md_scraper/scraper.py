@@ -4,12 +4,43 @@ from bs4 import BeautifulSoup
 from markdownify import markdownify as md
 
 class Scraper:
+    """
+    A web scraper that converts HTML content from a URL into clean Markdown.
+    
+    It handles fetching HTML, extracting metadata, identifying main content 
+    using heuristics, and converting the resulting DOM to GitHub Flavored Markdown.
+    """
+
     def fetch_html(self, url: str) -> str:
+        """
+        Fetches the raw HTML content from a given URL.
+        
+        Args:
+            url (str): The URL of the webpage to fetch.
+            
+        Returns:
+            str: The raw HTML content of the page.
+            
+        Raises:
+            requests.exceptions.HTTPError: If the request returned an unsuccessful status code.
+        """
         response = requests.get(url)
         response.raise_for_status()
         return response.text
 
     def extract_main_content(self, html: str) -> str:
+        """
+        Extracts the primary content area from an HTML string, removing boilerplate.
+        
+        It attempts to find tags like <main>, <article>, or common content class names.
+        Non-content elements such as <nav>, <footer>, <script>, and <style> are removed.
+        
+        Args:
+            html (str): The raw HTML content.
+            
+        Returns:
+            str: The HTML string containing only the main content area.
+        """
         soup = BeautifulSoup(html, 'lxml')
         
         # Remove boilerplate
@@ -30,6 +61,17 @@ class Scraper:
         return str(soup.body) if soup.body else str(soup)
 
     def extract_metadata(self, html: str) -> dict:
+        """
+        Extracts metadata (title, author, date, etc.) from an HTML string.
+        
+        Supports JSON-LD, OpenGraph, and standard meta tags.
+        
+        Args:
+            html (str): The raw HTML content.
+            
+        Returns:
+            dict: A dictionary containing extracted metadata fields.
+        """
         soup = BeautifulSoup(html, 'lxml')
         metadata = {
             'title': None,
@@ -82,6 +124,16 @@ class Scraper:
         return metadata
 
     def to_markdown(self, html: str, **options) -> str:
+        """
+        Converts an HTML string to GitHub Flavored Markdown.
+        
+        Args:
+            html (str): The HTML content to convert.
+            **options: Additional options passed to the markdownify library.
+            
+        Returns:
+            str: The resulting Markdown string.
+        """
         # Default options for GFM-like output
         defaults = {
             'heading_style': 'ATX',
@@ -94,7 +146,15 @@ class Scraper:
 
     def scrape(self, url: str, **options) -> dict:
         """
-        Full orchestration: fetch -> extract -> convert.
+        Orchestrates the full scraping flow: fetch, extract metadata, 
+        extract main content, and convert to Markdown.
+        
+        Args:
+            url (str): The URL of the webpage to scrape.
+            **options: Additional options for Markdown conversion.
+            
+        Returns:
+            dict: A dictionary containing 'url', 'metadata', 'markdown', and 'raw_html'.
         """
         html = self.fetch_html(url)
         metadata = self.extract_metadata(html)
