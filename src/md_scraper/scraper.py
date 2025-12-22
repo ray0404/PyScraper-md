@@ -1,6 +1,7 @@
 import requests
 import json
 from bs4 import BeautifulSoup
+from markdownify import markdownify as md
 
 class Scraper:
     def fetch_html(self, url: str) -> str:
@@ -79,3 +80,14 @@ class Scraper:
             metadata['title'] = soup.title.string
 
         return metadata
+
+    def to_markdown(self, html: str, **options) -> str:
+        # Default options for GFM-like output
+        defaults = {
+            'heading_style': 'ATX',
+            'bullets': '-',
+            'code_language_callback': lambda el: el.get('class', [''])[0].replace('language-', '') if el.get('class') else ''
+        }
+        # Merge with user options
+        config = {**defaults, **options}
+        return md(html, **config)

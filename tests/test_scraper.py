@@ -167,3 +167,39 @@ def test_extract_metadata_invalid_json_ld():
     """
     metadata = scraper.extract_metadata(html)
     assert metadata['title'] is None
+
+def test_to_markdown_basic():
+    scraper = Scraper()
+    html = "<h1>Title</h1><p>Paragraph with <strong>bold</strong> text.</p>"
+    markdown = scraper.to_markdown(html)
+    assert "# Title" in markdown
+    assert "Paragraph with **bold** text." in markdown
+
+def test_to_markdown_gfm():
+    scraper = Scraper()
+    html = """
+    <table>
+        <tr><th>Header</th></tr>
+        <tr><td>Data</td></tr>
+    </table>
+    <pre><code>print("hello")</code></pre>
+    """
+    markdown = scraper.to_markdown(html)
+    # Check for GFM table and code block markers
+    assert "| Header |" in markdown
+    assert "```" in markdown
+    assert "print(\"hello\")" in markdown
+
+def test_to_markdown_options():
+    scraper = Scraper()
+    html = '<p>Check <a href="https://example.com">this link</a> and <img src="img.png" alt="image"></p>'
+    
+    # Strip links
+    md_no_links = scraper.to_markdown(html, strip=['a'])
+    assert "this link" in md_no_links
+    assert "https://example.com" not in md_no_links
+    
+    # Strip images
+    md_no_images = scraper.to_markdown(html, strip=['img'])
+    assert "image" not in md_no_images
+    assert "this link" in md_no_images
