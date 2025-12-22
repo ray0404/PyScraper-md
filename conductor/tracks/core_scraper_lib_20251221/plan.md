@@ -9,9 +9,9 @@
 - [x] Task: Conductor - User Manual Verification 'Phase 1: Project Initialization & Foundation' (Protocol in workflow.md) 6e59b10
 
 ## Phase 2: Content Extraction Logic
-- [ ] Task: Implement `extract_main_content(html)` method in `Scraper` class
-    - [ ] Sub-task: Write tests with mock HTML containing boilerplate
-    - [ ] Sub-task: Implement basic heuristics to identify the main article tag (e.g., `<article>`, `.content`, `#main`)
+- [x] Task: Implement `extract_main_content(html)` method in `Scraper` class 2ca6e56
+    - [x] Sub-task: Write tests with mock HTML containing boilerplate
+    - [x] Sub-task: Implement basic heuristics to identify the main article tag (e.g., `<article>`, `.content`, `#main`)
 - [ ] Task: Implement `extract_metadata(html)` method
     - [ ] Sub-task: Write tests for title, author, and date extraction
     - [ ] Sub-task: Implement metadata extraction from `<meta>` tags and OpenGraph data
