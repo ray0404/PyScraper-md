@@ -1,9 +1,66 @@
 <!doctype html>
-<html>
+<html lang="en">
     <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@1/css/pico.min.css">
         <title>Markdown Scraper</title>
+        <style>
+            textarea {
+                min-height: 400px;
+                font-family: monospace;
+            }
+            .metadata {
+                font-size: 0.9rem;
+                color: #666;
+                margin-bottom: 1rem;
+            }
+        </style>
     </head>
     <body>
-        <h1>Hello World from Markdown Scraper!</h1>
+        <main class="container">
+            <hgroup>
+                <h1>Markdown Scraper</h1>
+                <h2>Transform web content into clean Markdown</h2>
+            </hgroup>
+
+            <form method="POST">
+                <div class="grid">
+                    <input type="url" name="url" placeholder="https://example.com/article" required value="{{ url or '' }}">
+                    <button type="submit">Scrape</button>
+                </div>
+                <label for="dynamic">
+                    <input type="checkbox" id="dynamic" name="dynamic" {% if dynamic %}checked{% endif %}>
+                    Dynamic Mode (Playwright)
+                </label>
+            </form>
+
+            {% if error %}
+            <article style="background-color: #fee; border-color: #fcc; color: #900;">
+                {{ error }}
+            </article>
+            {% endif %}
+
+            {% if result %}
+            <section id="results">
+                <h3>Results</h3>
+                <div class="metadata">
+                    <strong>Title:</strong> {{ result.metadata.title or 'N/A' }}<br>
+                    <strong>Author:</strong> {{ result.metadata.author or 'N/A' }}<br>
+                    <strong>URL:</strong> <a href="{{ result.url }}" target="_blank">{{ result.url }}</a>
+                </div>
+                <textarea readonly>{{ result.markdown }}</textarea>
+                <button class="secondary" onclick="copyToClipboard()">Copy Markdown</button>
+            </section>
+            <script>
+                function copyToClipboard() {
+                    const textarea = document.querySelector('textarea');
+                    textarea.select();
+                    document.execCommand('copy');
+                    alert('Markdown copied to clipboard!');
+                }
+            </script>
+            {% endif %}
+        </main>
     </body>
 </html>
