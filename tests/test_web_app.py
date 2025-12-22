@@ -26,7 +26,30 @@ def test_scrape_success(client):
         assert response.status_code == 200
         assert b"# Success" in response.data
         assert b"Test Title" in response.data
-        mock_scrape.assert_called_once_with('https://example.com', dynamic=False, svg_action='preserve')
+        mock_scrape.assert_called_once_with('https://example.com', dynamic=False, svg_action='preserve', strip=[])
+
+def test_scrape_with_strip(client):
+    with patch("md_scraper.web.app.Scraper.scrape") as mock_scrape:
+        mock_result = {
+            'url': 'https://example.com',
+            'markdown': '# Success',
+            'metadata': {}
+        }
+        mock_scrape.return_value = mock_result
+        
+        # Test with multiple strip tags
+        response = client.post('/', data={
+            'url': 'https://example.com', 
+            'strip_tags': ['script', 'iframe']
+        })
+        
+        assert response.status_code == 200
+        mock_scrape.assert_called_once_with(
+            'https://example.com', 
+            dynamic=False, 
+            svg_action='image', 
+            strip=['script', 'iframe']
+        )
 
 def test_scrape_failure(client):
     with pytest.MonkeyPatch.context() as mp:

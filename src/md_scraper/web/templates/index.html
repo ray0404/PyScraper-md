@@ -41,6 +41,32 @@
                         <option value="strip" {% if svg_action == 'strip' %}selected{% endif %}>Remove Entirely</option>
                     </select>
                 </label>
+
+                <fieldset>
+                    <legend>Strip Tags:</legend>
+                    <div class="grid">
+                        <label for="strip_a">
+                            <input type="checkbox" id="strip_a" name="strip_tags" value="a" {% if 'a' in strip_tags %}checked{% endif %}>
+                            Links
+                        </label>
+                        <label for="strip_img">
+                            <input type="checkbox" id="strip_img" name="strip_tags" value="img" {% if 'img' in strip_tags %}checked{% endif %}>
+                            Images
+                        </label>
+                        <label for="strip_script">
+                            <input type="checkbox" id="strip_script" name="strip_tags" value="script" {% if 'script' in strip_tags %}checked{% endif %}>
+                            Scripts
+                        </label>
+                        <label for="strip_style">
+                            <input type="checkbox" id="strip_style" name="strip_tags" value="style" {% if 'style' in strip_tags %}checked{% endif %}>
+                            Styles
+                        </label>
+                        <label for="strip_iframe">
+                            <input type="checkbox" id="strip_iframe" name="strip_tags" value="iframe" {% if 'iframe' in strip_tags %}checked{% endif %}>
+                            Iframes
+                        </label>
+                    </div>
+                </fieldset>
             </form>
 
             {% if error %}

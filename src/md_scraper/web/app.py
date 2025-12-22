@@ -9,6 +9,7 @@ def index():
     url = None
     dynamic = False
     svg_action = 'image'
+    strip_tags = []
     result = None
     error = None
     
@@ -16,14 +17,15 @@ def index():
         url = request.form.get('url')
         dynamic = 'dynamic' in request.form
         svg_action = request.form.get('svg_action', 'image')
+        strip_tags = request.form.getlist('strip_tags')
         
         scraper = Scraper()
         try:
-            result = scraper.scrape(url, dynamic=dynamic, svg_action=svg_action)
+            result = scraper.scrape(url, dynamic=dynamic, svg_action=svg_action, strip=strip_tags)
         except Exception as e:
             error = f"Error scraping {url}: {e}"
             
-    return render_template('index.html', url=url, dynamic=dynamic, svg_action=svg_action, result=result, error=error)
+    return render_template('index.html', url=url, dynamic=dynamic, svg_action=svg_action, strip_tags=strip_tags, result=result, error=error)
 
 def create_app():
     return app
