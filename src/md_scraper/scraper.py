@@ -188,19 +188,24 @@ class Scraper:
         config = {**defaults, **options}
         return md(html, **config)
 
-    def scrape(self, url: str, **options) -> dict:
+    def scrape(self, url: str, dynamic: bool = False, **options) -> dict:
         """
         Orchestrates the full scraping flow: fetch, extract metadata, 
         extract main content, and convert to Markdown.
         
         Args:
             url (str): The URL of the webpage to scrape.
+            dynamic (bool): Whether to use Playwright for dynamic rendering.
             **options: Additional options for Markdown conversion.
             
         Returns:
             dict: A dictionary containing 'url', 'metadata', 'markdown', and 'raw_html'.
         """
-        html = self.fetch_html(url)
+        if dynamic:
+            html = self.fetch_html_dynamic(url)
+        else:
+            html = self.fetch_html(url)
+            
         metadata = self.extract_metadata(html)
         main_html = self.extract_main_content(html)
         markdown = self.to_markdown(main_html, **options)

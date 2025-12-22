@@ -32,3 +32,34 @@ def test_fetch_html_dynamic_missing_playwright():
         # Since we put the import inside the method or try-except block
         with pytest.raises(ImportError, match="Playwright is not installed"):
             scraper.fetch_html_dynamic("https://example.com")
+
+def test_scrape_with_dynamic_flag():
+    scraper = Scraper()
+    url = "https://example.com/dynamic"
+    
+    with patch.object(Scraper, 'fetch_html', return_value="static") as mock_static:
+        with patch.object(Scraper, 'fetch_html_dynamic', return_value="dynamic") as mock_dynamic:
+            with patch.object(Scraper, 'extract_metadata', return_value={}):
+                with patch.object(Scraper, 'extract_main_content', return_value=""):
+                    with patch.object(Scraper, 'to_markdown', return_value=""):
+                        
+                        # Default (False)
+                        scraper.scrape(url)
+                        mock_static.assert_called_once()
+                        mock_dynamic.assert_not_called()
+                        
+                        mock_static.reset_mock()
+                        mock_dynamic.reset_mock()
+                        
+                        # Explicit False
+                        scraper.scrape(url, dynamic=False)
+                        mock_static.assert_called_once()
+                        mock_dynamic.assert_not_called()
+                        
+                        mock_static.reset_mock()
+                        mock_dynamic.reset_mock()
+                        
+                        # Explicit True
+                        scraper.scrape(url, dynamic=True)
+                        mock_static.assert_not_called()
+                        mock_dynamic.assert_called_once()
