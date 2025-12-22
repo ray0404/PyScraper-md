@@ -1,6 +1,6 @@
 # Plan: Web UI with Flask
 
-## Phase 1: Flask Setup & Basic Route
+## Phase 1: Flask Setup & Basic Route [checkpoint: 0cc9a25]
 - [x] Task: Add `flask` dependency to `pyproject.toml` ac0ca03
 - [x] Task: Create `src/md_scraper/web/app.py` with a basic Flask app 79fee73
     - [x] Sub-task: Create `templates/index.html` with a "Hello World" message
