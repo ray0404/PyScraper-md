@@ -168,3 +168,7 @@ conductor/
 GEMINI.md
 geminicli-doc.md
 firebase-debug.log
+
+# Local/Temporary
+scraper_project.md
+test_batch/
