@@ -20,7 +20,14 @@ def test_scrape_command_success():
         
         assert result.exit_code == 0
         assert expected_output in result.output
-        mock_scraper_instance.scrape.assert_called_once_with(url, dynamic=False, svg_action='image')
+        mock_scraper_instance.scrape.assert_called_once_with(
+            url, 
+            dynamic=False, 
+            svg_action='image', 
+            image_action='remote', 
+            assets_dir=None, 
+            base_url=url
+        )
 
 def test_scrape_command_failure():
     runner = CliRunner()
@@ -73,7 +80,10 @@ def test_scrape_command_options_passing():
             url, 
             dynamic=True, 
             strip=['a', 'img'],
-            svg_action='image'
+            svg_action='image',
+            image_action='remote',
+            assets_dir=None,
+            base_url=url
         )
 
 def test_scrape_command_svg_action_passing():
@@ -89,5 +99,8 @@ def test_scrape_command_svg_action_passing():
         mock_scraper_instance.scrape.assert_called_once_with(
             url, 
             dynamic=False, 
-            svg_action='preserve'
+            svg_action='preserve',
+            image_action='remote',
+            assets_dir=None,
+            base_url=url
         )

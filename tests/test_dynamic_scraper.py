@@ -22,7 +22,8 @@ def test_fetch_html_dynamic_success():
         
         assert html == expected_html
         mock_p.chromium.launch.assert_called_once()
-        mock_page.goto.assert_called_with(url)
+        mock_page.set_viewport_size.assert_called_once_with({"width": 1280, "height": 800})
+        mock_page.goto.assert_called_with(url, wait_until='networkidle')
 
 def test_fetch_html_dynamic_missing_playwright():
     # Simulate ImportError when importing playwright

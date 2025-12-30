@@ -4,36 +4,9 @@ import os
 import re
 import time
 from md_scraper.scraper import Scraper
+from md_scraper.utils import sanitize_filename, get_title_from_result
 
-def sanitize_filename(name):
-    """Sanitize a string to be safe for filenames."""
-    s = str(name).strip().replace(' ', '_')
-    s = re.sub(r'(?u)[^-\w.]', '', s)
-    return s[:50]
-
-def get_title_from_result(result, url):
-    """Extract a title for the file from metadata or URL."""
-    meta = result.get('metadata', {})
-    title = meta.get('title')
-    
-    if not title:
-        # Fallback to URL parts
-        try:
-            from urllib.parse import urlparse
-            path = urlparse(url).path
-            if path and path != '/':
-                title = path.strip('/').split('/')[-1]
-            else:
-                title = urlparse(url).netloc
-        except:
-            title = 'scraped_page'
-            
-    if not title:
-        title = f'scraped_{int(time.time())}'
-        
-    return sanitize_filename(title)
-
-def process_url_logic(url, server, dynamic, strip, svg_action):
+def process_url_logic(url, server, dynamic, strip, svg_action, image_action, assets_dir):
     """Helper to process a single URL (local or remote). Returns result dict."""
     if server:
         # Remote scraping mode
@@ -42,6 +15,7 @@ def process_url_logic(url, server, dynamic, strip, svg_action):
             'url': url,
             'dynamic': dynamic,
             'svg_action': svg_action,
+            'image_action': image_action,
             'strip_tags': list(strip) if strip else []
         }
         try:
@@ -56,7 +30,12 @@ def process_url_logic(url, server, dynamic, strip, svg_action):
         # Local scraping mode
         scraper = Scraper()
         # Pass options to scrape method
-        scrape_options = {'svg_action': svg_action}
+        scrape_options = {
+            'svg_action': svg_action,
+            'image_action': image_action,
+            'assets_dir': assets_dir,
+            'base_url': url
+        }
         if strip:
             scrape_options['strip'] = list(strip)
             
@@ -71,9 +50,11 @@ def cli():
 @click.option('--output', '-o', type=click.Path(), help='File path (single URL) or Directory (multiple URLs) to save output.')
 @click.option('--dynamic', '-d', is_flag=True, default=False, help='Enable Playwright-based dynamic scraping.')
 @click.option('--strip', '-s', multiple=True, help='Tags to strip from the output (can be used multiple times).')
-@click.option('--svg-action', type=click.Choice(['image', 'preserve', 'strip']), default='image', help='Action for inline <svg> tags (default: image).')
+@click.option('--svg-action', type=click.Choice(['image', 'preserve', 'strip', 'file']), default='image', help='Action for inline <svg> tags (default: image).')
+@click.option('--image-action', type=click.Choice(['remote', 'base64', 'file']), default='remote', help='Action for <img> tags (default: remote).')
+@click.option('--assets-dir', help='Directory to save images if using "file" action.')
 @click.option('--server', help='Remote scraper server URL (e.g., https://my-scraper.run.app). If set, scraping happens remotely.')
-def scrape(urls, output, dynamic, strip, svg_action, server):
+def scrape(urls, output, dynamic, strip, svg_action, image_action, assets_dir, server):
     """Scrape URL(s) and print/save Markdown.
     
     URLS can be web links or a path to a text file containing URLs.
@@ -81,7 +62,7 @@ def scrape(urls, output, dynamic, strip, svg_action, server):
     
     target_urls = []
     
-    # 1. Parse Inputs (URLs or Files)
+    # ... (existing parsing code) ...
     for u in urls:
         if os.path.isfile(u):
             try:
@@ -115,7 +96,16 @@ def scrape(urls, output, dynamic, strip, svg_action, server):
             click.echo(f"{prefix}Scraping {url}...", err=True)
             
         try:
-            result = process_url_logic(url, server, dynamic, strip, svg_action)
+            # Handle automatic assets directory if using 'file' action
+            current_assets_dir = assets_dir
+            if (svg_action == 'file' or image_action == 'file') and not current_assets_dir:
+                if output:
+                    base_path = output if os.path.isdir(output) else os.path.dirname(output)
+                    current_assets_dir = os.path.join(base_path or '.', 'assets')
+                else:
+                    current_assets_dir = 'assets'
+
+            result = process_url_logic(url, server, dynamic, strip, svg_action, image_action, current_assets_dir)
             markdown = result.get('markdown', '')
             
             # Determine Output

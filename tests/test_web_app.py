@@ -22,11 +22,11 @@ def test_scrape_success(client):
         }
         mock_scrape.return_value = mock_result
         
-        response = client.post('/', data={'url': 'https://example.com', 'svg_action': 'preserve'})
+        response = client.post('/', data={'urls': 'https://example.com', 'svg_action': 'preserve'})
         assert response.status_code == 200
         assert b"# Success" in response.data
         assert b"Test Title" in response.data
-        mock_scrape.assert_called_once_with('https://example.com', dynamic=False, svg_action='preserve', strip=[])
+        mock_scrape.assert_called_once_with('https://example.com', dynamic=False, svg_action='preserve', image_action='remote', strip=[])
 
 def test_scrape_with_strip(client):
     with patch("md_scraper.web.app.Scraper.scrape") as mock_scrape:
@@ -39,7 +39,7 @@ def test_scrape_with_strip(client):
         
         # Test with multiple strip tags
         response = client.post('/', data={
-            'url': 'https://example.com', 
+            'urls': 'https://example.com', 
             'strip_tags': ['script', 'iframe']
         })
         
@@ -48,6 +48,7 @@ def test_scrape_with_strip(client):
             'https://example.com', 
             dynamic=False, 
             svg_action='image', 
+            image_action='remote',
             strip=['script', 'iframe']
         )
 
@@ -57,7 +58,7 @@ def test_scrape_failure(client):
             raise Exception("Network error")
         mp.setattr("md_scraper.web.app.Scraper.scrape", mock_scrape)
         
-        response = client.post('/', data={'url': 'https://example.com'})
+        response = client.post('/', data={'urls': 'https://example.com'})
         assert response.status_code == 200
         assert b"Error scraping" in response.data
         assert b"Network error" in response.data

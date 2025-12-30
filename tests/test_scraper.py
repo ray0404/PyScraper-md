@@ -224,6 +224,59 @@ def test_to_markdown_svg_strip():
     assert "<svg" not in markdown
     assert "Text" in markdown
 
+def test_to_markdown_svg_static_fallback():
+    scraper = Scraper()
+    # SVG with currentColor and no dimensions, but with viewBox
+    html = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="..."/></svg>'
+    
+    # Run conversion
+    markdown = scraper.to_markdown(html, svg_action='image')
+    
+    # Extract the base64 part
+    import re
+    import base64
+    match = re.search(r'data:image/svg\+xml;base64,([^"\)]+)', markdown)
+    assert match is not None
+    
+    decoded = base64.b64decode(match.group(1)).decode('utf-8')
+    
+    # Verify fixes were applied
+    assert 'fill="#000000"' in decoded
+    assert 'width="24"' in decoded
+    assert 'height="24"' in decoded
+
+def test_to_markdown_image_base64():
+    scraper = Scraper()
+    html = '<img src="https://example.com/test.png">'
+    
+    with patch('requests.get') as mock_get:
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.content = b"fake image data"
+        mock_resp.headers = {'Content-Type': 'image/png'}
+        mock_get.return_value = mock_resp
+        
+        markdown = scraper.to_markdown(html, image_action='base64')
+        assert "data:image/png;base64," in markdown
+        assert "ZmFrZSBpbWFnZSBkYXRh" in markdown # base64 of "fake image data"
+
+def test_to_markdown_image_file(tmp_path):
+    scraper = Scraper()
+    html = '<img src="https://example.com/test.png">'
+    assets_dir = tmp_path / "assets"
+    
+    with patch('requests.get') as mock_get:
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.content = b"fake data"
+        mock_get.return_value = mock_resp
+        
+        markdown = scraper.to_markdown(html, image_action='file', assets_dir=str(assets_dir))
+        
+        assert "assets/image_0.png" in markdown
+        assert (assets_dir / "image_0.png").exists()
+        assert (assets_dir / "image_0.png").read_bytes() == b"fake data"
+
 
 def test_scrape_orchestration():
     scraper = Scraper()

@@ -24,23 +24,39 @@
                 <h2>Transform web content into clean Markdown</h2>
             </hgroup>
 
-            <form method="POST">
-                <div class="grid">
-                    <input type="url" name="url" placeholder="https://example.com/article" required value="{{ url or '' }}">
-                    <button type="submit">Scrape</button>
-                </div>
-                <label for="dynamic">
-                    <input type="checkbox" id="dynamic" name="dynamic" {% if dynamic %}checked{% endif %}>
-                    Dynamic Mode (Playwright)
+            <form method="POST" enctype="multipart/form-data">
+                <label for="urls">URLs (one per line):</label>
+                <textarea name="urls" id="urls" placeholder="https://example.com/page1&#10;https://example.com/page2">{{ urls_input or '' }}</textarea>
+                
+                <label for="batch_file">Or upload a text file with URLs:
+                    <input type="file" id="batch_file" name="batch_file" accept=".txt,.md">
                 </label>
 
-                <label for="svg_action">SVG Handling:
-                    <select id="svg_action" name="svg_action">
-                        <option value="image" {% if svg_action == 'image' %}selected{% endif %}>Convert to Image (Base64)</option>
-                        <option value="preserve" {% if svg_action == 'preserve' %}selected{% endif %}>Preserve as HTML</option>
-                        <option value="strip" {% if svg_action == 'strip' %}selected{% endif %}>Remove Entirely</option>
-                    </select>
-                </label>
+                <div class="grid">
+                    <label for="dynamic">
+                        <input type="checkbox" id="dynamic" name="dynamic" {% if dynamic %}checked{% endif %}>
+                        Dynamic Mode (Playwright)
+                    </label>
+                </div>
+
+                <div class="grid">
+                    <label for="svg_action">SVG Handling:
+                        <select id="svg_action" name="svg_action">
+                            <option value="image" {% if svg_action == 'image' %}selected{% endif %}>Convert to Image (Base64)</option>
+                            <option value="preserve" {% if svg_action == 'preserve' %}selected{% endif %}>Preserve as HTML</option>
+                            <option value="strip" {% if svg_action == 'strip' %}selected{% endif %}>Remove Entirely</option>
+                        </select>
+                    </label>
+
+                    <label for="image_action">Image Handling:
+                        <select id="image_action" name="image_action">
+                            <option value="remote" {% if image_action == 'remote' %}selected{% endif %}>Keep Remote URLs</option>
+                            <option value="base64" {% if image_action == 'base64' %}selected{% endif %}>Embed as Base64</option>
+                        </select>
+                    </label>
+                </div>
+
+                <button type="submit">Scrape All</button>
 
                 <fieldset>
                     <legend>Strip Tags:</legend>
@@ -75,23 +91,76 @@
             </article>
             {% endif %}
 
-            {% if result %}
+            {% if results %}
             <section id="results">
-                <h3>Results</h3>
-                <div class="metadata">
-                    <strong>Title:</strong> {{ result.metadata.title or 'N/A' }}<br>
-                    <strong>Author:</strong> {{ result.metadata.author or 'N/A' }}<br>
-                    <strong>URL:</strong> <a href="{{ result.url }}" target="_blank">{{ result.url }}</a>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                    <h3>Results ({{ results|length }})</h3>
+                    <button class="outline" onclick="downloadAllZip()">Download ZIP</button>
                 </div>
-                <textarea readonly>{{ result.markdown }}</textarea>
-                <button class="secondary" onclick="copyToClipboard()">Copy Markdown</button>
+
+                {% if results|length > 1 %}
+                <nav>
+                    <ul>
+                        {% for res in results %}
+                        <li>
+                            <a href="#" class="tab-link {% if loop.first %}active{% endif %}" onclick="showTab(event, 'tab-{{ loop.index0 }}')">
+                                {{ res.metadata.title or 'Page ' ~ loop.index }}
+                            </a>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </nav>
+                {% endif %}
+
+                {% for res in results %}
+                <div id="tab-{{ loop.index0 }}" class="tab-content" style="display: {% if loop.first %}block{% else %}none{% endif %};">
+                    <div class="metadata">
+                        <strong>Title:</strong> {{ res.metadata.title or 'N/A' }}<br>
+                        <strong>Author:</strong> {{ res.metadata.author or 'N/A' }}<br>
+                        <strong>URL:</strong> <a href="{{ res.url }}" target="_blank">{{ res.url }}</a>
+                    </div>
+                    <textarea id="markdown-{{ loop.index0 }}" readonly>{{ res.markdown }}</textarea>
+                    <button class="secondary" onclick="copyToClipboard('markdown-{{ loop.index0 }}')">Copy Markdown</button>
+                </div>
+                {% endfor %}
             </section>
+
             <script>
-                function copyToClipboard() {
-                    const textarea = document.querySelector('textarea');
+                const resultsData = {{ results | tojson }};
+
+                function showTab(event, tabId) {
+                    event.preventDefault();
+                    document.querySelectorAll('.tab-content').forEach(el => el.style.display = 'none');
+                    document.querySelectorAll('.tab-link').forEach(el => el.classList.remove('active'));
+                    document.getElementById(tabId).style.display = 'block';
+                    event.currentTarget.classList.add('active');
+                }
+
+                function copyToClipboard(id) {
+                    const textarea = document.getElementById(id);
                     textarea.select();
                     document.execCommand('copy');
                     alert('Markdown copied to clipboard!');
+                }
+
+                async function downloadAllZip() {
+                    const response = await fetch('/api/download_zip', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ results: resultsData })
+                    });
+                    if (response.ok) {
+                        const blob = await response.blob();
+                        const url = window.URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = 'scraped_pages.zip';
+                        document.body.appendChild(a);
+                        a.click();
+                        a.remove();
+                    } else {
+                        alert('Failed to generate ZIP.');
+                    }
                 }
             </script>
             {% endif %}

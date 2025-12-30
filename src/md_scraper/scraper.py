@@ -66,8 +66,44 @@ class Scraper:
             browser = p.chromium.launch(**launch_args)
             try:
                 page = browser.new_page()
-                page.goto(url)
-                # TODO: Add wait_for_selector or similar logic if needed for specific sites
+                # Set a reasonable viewport size
+                page.set_viewport_size({"width": 1280, "height": 800})
+                page.goto(url, wait_until="networkidle")
+                
+                # Bake computed styles into SVGs so they render correctly in Markdown
+                page.evaluate("""() => {
+                    document.querySelectorAll('svg').forEach(svg => {
+                        const style = window.getComputedStyle(svg);
+                        const rect = svg.getBoundingClientRect();
+                        
+                        // 1. Bake dimensions based on actual rendered size
+                        // Use rect if it's non-zero, otherwise fallback to reasonable defaults
+                        const width = rect.width > 0 ? rect.width : (parseInt(svg.getAttribute('width')) || 16);
+                        const height = rect.height > 0 ? rect.height : (parseInt(svg.getAttribute('height')) || 16);
+                        
+                        svg.setAttribute('width', width);
+                        svg.setAttribute('height', height);
+                        
+                        // 2. Bake colors from computed styles
+                        if (svg.getAttribute('fill') === 'currentColor' || !svg.hasAttribute('fill')) {
+                            const fill = style.fill !== 'none' ? style.fill : (style.color || '#000000');
+                            svg.setAttribute('fill', fill);
+                        }
+                        if (svg.getAttribute('stroke') === 'currentColor') {
+                            svg.setAttribute('stroke', style.stroke || style.color || '#000000');
+                        }
+
+                        // 3. Force visibility (many icons are hidden/transparent by default until hover)
+                        svg.style.opacity = '1';
+                        svg.style.visibility = 'visible';
+                        svg.style.display = 'inline-block';
+                        
+                        // 4. Clean up to reduce Base64 bloat and avoid CSS interference
+                        svg.removeAttribute('class');
+                        // We keep the style attribute briefly then clean it if it contains complex logic
+                    });
+                }""")
+
                 content = page.content()
                 return content
             finally:
@@ -179,28 +215,102 @@ class Scraper:
                     'image' (default): Convert to base64 image.
                     'preserve': Keep as raw HTML.
                     'strip': Remove entirely.
+                    'file': Save to local file and use relative link.
+                image_action (str): Action for <img> tags.
+                    'remote' (default): Keep original URL.
+                    'base64': Convert remote images to base64.
+                    'file': Download to local file and use relative link.
+                assets_dir (str): Directory to save images if 'file' action is used.
+                base_url (str): Base URL to resolve relative image paths.
             
         Returns:
             str: The resulting Markdown string.
         """
         svg_action = options.pop('svg_action', 'image')
+        image_action = options.pop('image_action', 'remote')
+        assets_dir = options.pop('assets_dir', None)
+        base_url = options.pop('base_url', None)
+        
         soup = BeautifulSoup(html, 'lxml')
 
+        # 1. Handle SVGs
         placeholders = {}
         if svg_action == 'strip':
             for svg in soup.find_all('svg'):
                 svg.decompose()
-        elif svg_action == 'image':
-            for svg in soup.find_all('svg'):
+        elif svg_action in ['image', 'file']:
+            for i, svg in enumerate(soup.find_all('svg')):
+                # Fallback fixes for visibility
+                if svg.get('fill') == 'currentColor' or not svg.has_attr('fill'):
+                    svg['fill'] = '#000000'
+                
+                # Dimensions
+                if not svg.get('width') or not svg.get('height'):
+                    viewbox = svg.get('viewbox') or svg.get('viewBox')
+                    if viewbox:
+                        try:
+                            _, _, w, h = map(float, viewbox.replace(',', ' ').split())
+                            if not svg.get('width'): svg['width'] = str(int(w))
+                            if not svg.get('height'): svg['height'] = str(int(h))
+                        except: pass
+                    if not svg.get('width'): svg['width'] = "16"
+                    if not svg.get('height'): svg['height'] = "16"
+
                 svg_str = str(svg)
-                encoded = base64.b64encode(svg_str.encode('utf-8')).decode('utf-8')
-                img_tag = soup.new_tag('img', src=f"data:image/svg+xml;base64,{encoded}", alt="svg image")
+                
+                if svg_action == 'file' and assets_dir:
+                    os.makedirs(assets_dir, exist_ok=True)
+                    filename = f"svg_icon_{i}.svg"
+                    filepath = os.path.join(assets_dir, filename)
+                    with open(filepath, 'w') as f:
+                        f.write(svg_str)
+                    # Use relative path for Markdown
+                    img_tag = soup.new_tag('img', src=os.path.join(os.path.basename(assets_dir), filename), alt="svg icon")
+                else:
+                    # Default: base64 image
+                    encoded = base64.b64encode(svg_str.encode('utf-8')).decode('utf-8')
+                    img_tag = soup.new_tag('img', src=f"data:image/svg+xml;base64,{encoded}", alt="svg image")
+                
                 svg.replace_with(img_tag)
         elif svg_action == 'preserve':
             for i, svg in enumerate(soup.find_all('svg')):
                 placeholder = f"MDScraperSVG{i}"
                 placeholders[placeholder] = str(svg)
                 svg.replace_with(placeholder)
+
+        # 2. Handle standard Images
+        if image_action != 'remote':
+            from urllib.parse import urljoin
+            for i, img in enumerate(soup.find_all('img')):
+                src = img.get('src')
+                if not src or src.startswith('data:'):
+                    continue
+                
+                # Resolve relative URLs
+                if base_url:
+                    src = urljoin(base_url, src)
+                
+                try:
+                    if image_action == 'base64':
+                        resp = requests.get(src, timeout=10)
+                        if resp.status_code == 200:
+                            content_type = resp.headers.get('Content-Type', 'image/png')
+                            encoded = base64.b64encode(resp.content).decode('utf-8')
+                            img['src'] = f"data:{content_type};base64,{encoded}"
+                    
+                    elif image_action == 'file' and assets_dir:
+                        os.makedirs(assets_dir, exist_ok=True)
+                        resp = requests.get(src, timeout=10)
+                        if resp.status_code == 200:
+                            ext = src.split('.')[-1].split('?')[0] or 'png'
+                            filename = f"image_{i}.{ext}"
+                            filepath = os.path.join(assets_dir, filename)
+                            with open(filepath, 'wb') as f:
+                                f.write(resp.content)
+                            img['src'] = os.path.join(os.path.basename(assets_dir), filename)
+                except Exception as e:
+                    # Fallback to remote URL on failure
+                    continue
 
         # Default options for GFM-like output
         defaults = {
