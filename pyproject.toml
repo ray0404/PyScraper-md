@@ -14,7 +14,11 @@ dependencies = [
     "lxml (>=6.0.2,<7.0.0)",
     "click (>=8.3.1,<9.0.0)",
     "flask (>=3.1.2,<4.0.0)",
-    "gunicorn (>=23.0.0,<24.0.0)",
+    "gunicorn (>=23.0.0,<24.0.0)"
+]
+
+[project.optional-dependencies]
+dynamic = [
     "playwright (>=1.49.1,<2.0.0)"
 ]
 

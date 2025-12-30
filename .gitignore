@@ -166,4 +166,5 @@ Thumbs.db
 # Project specific
 conductor/
 GEMINI.md
+geminicli-doc.md
 firebase-debug.log

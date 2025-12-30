@@ -23,7 +23,7 @@ COPY pyproject.toml poetry.lock ./
 
 # Install dependencies (excluding dev group)
 RUN poetry config virtualenvs.create false \
-    && poetry install --only main --no-interaction --no-ansi --no-root
+    && poetry install --only main --extras dynamic --no-interaction --no-ansi --no-root
 
 # Install Playwright and its system dependencies
 # This command installs the browsers and the OS-level dependencies they need
@@ -33,7 +33,7 @@ RUN playwright install --with-deps chromium
 COPY . .
 
 # Install the project itself
-RUN poetry install --only main --no-interaction --no-ansi
+RUN poetry install --only main --extras dynamic --no-interaction --no-ansi
 
 # Expose the port
 EXPOSE 8080

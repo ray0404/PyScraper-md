@@ -41,30 +41,51 @@ A robust, developer-centric Python web scraper designed to transform complex web
 git clone https://github.com/yourusername/md-scraper.git
 cd md-scraper
 poetry install
+
+# For global CLI access (optional but recommended):
+pip install --editable .
 ```
 
 **Note for Termux users:**
-If developing on Android/Termux, install Chromium via `pkg install chromium` and set the `CHROMIUM_PATH` environment variable.
+If developing on Android/Termux, install Chromium via `pkg install chromium` and set the `CHROMIUM_PATH` environment variable. `Playwright` installation via pip is not supported on Termux; use the `--server` option (see below) or the Web UI for dynamic scraping.
 
 ### Usage
 
 #### Command Line Interface (CLI)
 
-The CLI is available via the `scraper` command:
+The CLI is available via the `scraper` command (if installed globally) or via `poetry run scraper`:
 
 ```bash
 # Scrape a static page to stdout
-poetry run scraper scrape https://example.com/article
+scraper scrape https://example.com/article
 
 # Scrape and save to a file
-poetry run scraper scrape https://example.com/article -o my_article.md
+scraper scrape https://example.com/article -o my_article.md
 
-# Scrape a dynamic (JS-heavy) site
-poetry run scraper scrape https://react-site.com --dynamic
+# Remote Scraping (Recommended for Termux/Dynamic sites)
+# Offloads the scraping (including Playwright/JS rendering) to your deployed server
+scraper scrape https://react-site.com --server https://scraper-751660269987.us-central1.run.app
+
+# Dynamic scraping (Local - requires Playwright installed)
+scraper scrape https://react-site.com --dynamic
 
 # Strip specific tags (e.g., remove all images and links)
-poetry run scraper scrape https://example.com -s img -s a
+scraper scrape https://example.com -s img -s a
 ```
+
+#### Interactive Batch Script (`scraper-go`)
+
+An interactive Bash script is included for easy batch processing and file management.
+
+```bash
+./scraper-go.sh
+```
+
+**Features:**
+*   **Interactive Input:** Accepts single URL, multiple URLs (space-separated), or a `.txt` batch file.
+*   **Auto-Naming:** Automatically generates filenames based on the page title (H1/H2).
+*   **Batch Organization:** Options to save all outputs to a specific directory.
+*   **Remote Enabled:** Configured to use your deployed Cloud Run instance by default.
 
 #### Web Interface
 
@@ -79,6 +100,8 @@ Open your browser and navigate to `http://127.0.0.1:5000`.
 
 The application is live on Google Cloud Run:
 **[https://scraper-751660269987.us-central1.run.app](https://scraper-751660269987.us-central1.run.app)**
+
+It exposes a REST API at `/api/scrape` for remote CLI usage.
 
 #### As a Python Library
 

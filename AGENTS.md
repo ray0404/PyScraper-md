@@ -42,8 +42,14 @@ poetry run pytest --cov=md_scraper
 
 ### Execution (Testing logic manually)
 ```bash
-# Test CLI
-poetry run scraper scrape https://example.com
+# Test CLI (Static)
+scraper scrape https://example.com
+
+# Test CLI (Remote/Dynamic - Recommended for Termux)
+scraper scrape https://example.com --server https://scraper-751660269987.us-central1.run.app
+
+# Test Interactive Script
+./scraper-go.sh
 
 # Test Web (start in background if needed)
 poetry run python src/md_scraper/web/app.py &
