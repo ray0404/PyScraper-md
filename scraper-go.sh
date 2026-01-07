@@ -1,8 +1,8 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # Configuration
 SERVER_URL="https://scraper-751660269987.us-central1.run.app"
-SCRAPER_CMD="scraper scrape"
+SCRAPER_CMD="poetry run scraper scrape"
 
 # Colors
 GREEN='\033[0;32m'
