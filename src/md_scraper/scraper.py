@@ -2,6 +2,8 @@ import requests
 import json
 import os
 import base64
+import email
+from email import policy
 from bs4 import BeautifulSoup
 from markdownify import markdownify as md
 
@@ -21,20 +23,73 @@ class Scraper:
 
     def fetch_html(self, url: str) -> str:
         """
-        Fetches the raw HTML content from a given URL.
+        Fetches the raw HTML content from a given URL or local file.
         
         Args:
-            url (str): The URL of the webpage to fetch.
+            url (str): The URL of the webpage or path to a local file.
             
         Returns:
-            str: The raw HTML content of the page.
+            str: The raw HTML content.
             
         Raises:
             requests.exceptions.HTTPError: If the request returned an unsuccessful status code.
+            FileNotFoundError: If the local file does not exist.
         """
+        # 1. Check if it's a local file
+        if os.path.exists(url) and os.path.isfile(url):
+            return self._read_local_file(url)
+
+        # 2. Existing requests logic
         response = requests.get(url)
         response.raise_for_status()
         return response.text
+
+    def _read_local_file(self, file_path: str) -> str:
+        """
+        Reads local HTML or MHT files.
+        
+        Args:
+            file_path (str): Path to the local file.
+            
+        Returns:
+            str: The extracted HTML content.
+        """
+        lower_path = file_path.lower()
+        
+        if lower_path.endswith('.mht') or lower_path.endswith('.mhtml'):
+            with open(file_path, 'rb') as f:
+                msg = email.message_from_binary_file(f, policy=policy.default)
+                
+            # Find the HTML part
+            body = ""
+            if msg.is_multipart():
+                for part in msg.walk():
+                    content_type = part.get_content_type()
+                    if content_type == "text/html":
+                        body = part.get_content()
+                        # Prefer the first text/html part
+                        break
+            else:
+                # If not multipart, check content type or assume it's the body
+                if msg.get_content_type() == "text/html":
+                    body = msg.get_content()
+            
+            if not body:
+                # Fallback: try to just decode the payload if specific part finding failed
+                try:
+                    body = msg.get_body(preferencelist=('html', 'plain')).get_content()
+                except Exception:
+                    pass
+
+            if not body:
+                raise ValueError(f"Could not find text/html content in MHT file: {file_path}")
+            
+            return body
+
+        else:
+            # Assume HTML/text
+            with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                return f.read()
 
     def fetch_html_dynamic(self, url: str) -> str:
         """

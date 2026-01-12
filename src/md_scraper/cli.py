@@ -65,12 +65,17 @@ def scrape(urls, output, dynamic, strip, svg_action, image_action, assets_dir, s
     # ... (existing parsing code) ...
     for u in urls:
         if os.path.isfile(u):
-            try:
-                with open(u, 'r') as f:
-                    lines = [line.strip() for line in f if line.strip() and not line.strip().startswith('#')]
-                    target_urls.extend(lines)
-            except Exception as e:
-                click.echo(f"Error reading file {u}: {e}", err=True)
+            # Check extension to decide if it's a target file or a list of URLs
+            ext = os.path.splitext(u)[1].lower()
+            if ext in ['.html', '.htm', '.mht', '.mhtml']:
+                target_urls.append(u)
+            else:
+                try:
+                    with open(u, 'r') as f:
+                        lines = [line.strip() for line in f if line.strip() and not line.strip().startswith('#')]
+                        target_urls.extend(lines)
+                except Exception as e:
+                    click.echo(f"Error reading file {u}: {e}", err=True)
         else:
             target_urls.append(u)
             
