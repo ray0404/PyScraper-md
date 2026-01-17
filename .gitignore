@@ -180,3 +180,7 @@ scraper_output.md
 firecrawl_output.md
 scraper_output.md
 .git
+.repomixignore
+codewiki_mapcn.md
+firebase.json
+repomix_PyScraper.md
