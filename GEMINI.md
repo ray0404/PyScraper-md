@@ -69,8 +69,9 @@ poetry run python src/md_scraper/web/app.py
 docker build -t scraper .
 
 # Run the container
-docker run -p 8080:8080 scraper
+docker run -p 8080:8080 --name scraper_container scraper
 ```
+> **Note:** Ensure port 8080 is free. If not, map to another port (e.g., `-p 8081:8080`) or kill the process occupying it.
 
 ## Testing
 

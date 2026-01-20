@@ -102,6 +102,23 @@ Run dev server "with persistence" (no hangups):
 nohup poetry run python src/md_scraper/web/app.py > app.log 2>&1 &
 ```
 
+#### Docker
+
+You can build and run the application in a Docker container. This is useful for isolating the environment and ensuring all dependencies (including Playwright browsers) are correctly installed.
+
+**Build the image:**
+```bash
+docker build -t scraper .
+```
+
+**Run the container:**
+```bash
+# Run on port 8080
+docker run -p 8080:8080 --name scraper_container scraper
+```
+
+**Note:** If port 8080 is already in use, you may need to kill the process using it or map to a different port (e.g., `-p 8081:8080`).
+
 #### Cloud Deployment
 
 The application is live on Google Cloud Run:
