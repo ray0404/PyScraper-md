@@ -94,7 +94,13 @@ Start the local development server:
 ```bash
 poetry run python src/md_scraper/web/app.py
 ```
-Open your browser and navigate to `http://127.0.0.1:5000`.
+Open your browser and navigate to `http://127.0.0.1:8080`.
+
+Run dev server "with persistence" (no hangups):
+
+```bash
+nohup poetry run python src/md_scraper/web/app.py > app.log 2>&1 &
+```
 
 #### Cloud Deployment
 
