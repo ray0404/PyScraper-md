@@ -22,6 +22,14 @@ This document serves as the authoritative guide for AI agents (including Google 
     *   Are we running headless? (Default: Yes).
     *   Are we using `--no-sandbox`? (Critical for containerized/root environments).
 
+### 1.4 Project Coordination (Conductor)
+*   **Asynchronous State:** This project uses the **Conductor** system to maintain state across asynchronous agent sessions.
+*   **Source of Truth:** The status of a task is **NOT** in the chat history; it is in the `conductor/tracks/` directory.
+*   **Protocol:**
+    1.  **Locate:** Check `conductor/tracks.md` (or the registry) to find the active track.
+    2.  **Load:** Read the specific track's `plan.md` (e.g., `conductor/tracks/feat_crawler/plan.md`) to understand current progress.
+    3.  **Update:** You **MUST** mark steps as completed in the `plan.md` before finishing your session.
+
 ---
 
 ## 2. Architectural Deep Dive
@@ -76,12 +84,14 @@ The `Crawler` class manages the recursive scraping process:
 ## 3. Development Workflow
 
 ### 3.1 Task Execution Cycle
-1.  **Analyze:** Read the user request. Search `src/` to identify impacted components.
-2.  **Plan:** Formulate a step-by-step plan. If complex, create a temporary specification file.
-3.  **Test (Red):** Write a failing test in `tests/` that asserts the desired behavior.
-4.  **Implement (Green):** Write the minimal code necessary to pass the test.
-5.  **Refactor:** Optimize the code while ensuring tests stay green.
-6.  **Verify:** Run the full suite (`poetry run pytest`).
+1.  **Sync:** Check `conductor/tracks/` for the active plan and pending steps.
+2.  **Analyze:** Read the user request and search `src/` to identify impacted components.
+3.  **Plan:** Formulate a step-by-step plan. If complex, create a temporary specification file.
+4.  **Test (Red):** Write a failing test in `tests/` that asserts the desired behavior.
+5.  **Implement (Green):** Write the minimal code necessary to pass the test.
+6.  **Refactor:** Optimize the code while ensuring tests stay green.
+7.  **Verify:** Run the full suite (`poetry run pytest`).
+8.  **Record:** Update the `conductor` plan to reflect completed work.
 
 ### 3.2 Dependency Management (Poetry)
 *   **Add Runtime Dependency:** `poetry add <package_name>`
@@ -103,6 +113,7 @@ The `Crawler` class manages the recursive scraping process:
 | File Path | Description |
 | :--- | :--- |
 | `GEMINI.md` | **Context Master.** The high-level map of the project. |
+| `conductor/` | **Project State.** Contains active tracks and implementation plans. |
 | `pyproject.toml` | Build system, dependencies, and tool configuration. |
 | `src/md_scraper/scraper.py` | **Core Logic.** HTML fetching, cleaning, and conversion. |
 | `src/md_scraper/crawler.py` | **Crawler Logic.** Recursive link following and queue. |
