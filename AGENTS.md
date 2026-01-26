@@ -56,7 +56,7 @@ The `Crawler` class manages the recursive scraping process:
 *   **CLI (`src/md_scraper/cli.py`):**
     *   Built with `Click`.
     *   Handles argument parsing, file I/O, and batch processing logic.
-    *   **Crawling:** Exposes flags `--crawl`, `--depth`, `--only-subpaths`.
+    *   **Crawling:** Exposes flags `--crawl`, `--depth`, `--only-subpaths`, and `--max-pages`.
     *   **Remote Offloading:** Logic exists to serialize CLI arguments into a JSON payload and POST them to the Cloud Run instance.
 *   **Web/API (`src/md_scraper/web/app.py`):**
     *   Built with `Flask`.
@@ -108,6 +108,7 @@ The `Crawler` class manages the recursive scraping process:
 | `src/md_scraper/crawler.py` | **Crawler Logic.** Recursive link following and queue. |
 | `src/md_scraper/cli.py` | CLI command definitions and argument handling. |
 | `src/md_scraper/web/app.py` | Flask web server and API routes. |
+| `tests/test_web_crawl.py` | Integration tests for API crawling parameters. |
 | `tests/` | Test suite. Mirroring the `src` structure is encouraged. |
 | `scraper-go.sh` | Bash script for batch operations and remote scraping. |
 
