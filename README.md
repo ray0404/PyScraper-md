@@ -9,6 +9,7 @@ A robust, developer-centric Python web scraper designed to transform complex web
 ## ✨ Key Features
 
 -   **Intelligent Extraction:** Uses heuristics to identify the main content area (article, main, etc.) while stripping away navigation, ads, and footers.
+-   **Recursive Crawling:** Built-in crawler to fetch linked pages up to a specified depth, with optional subpath restriction.
 -   **High-Fidelity GFM:** Produces clean Markdown including tables, code blocks (with language detection), and links.
 -   **Static & Dynamic Support:** 
     -   Fast static scraping using `BeautifulSoup4` & `requests`.
@@ -61,6 +62,9 @@ scraper scrape https://example.com/article
 
 # Scrape and save to a file
 scraper scrape https://example.com/article -o my_article.md
+
+# Crawl a knowledge base (depth 2, only subpaths)
+scraper scrape https://tailscale.com/kb/ --crawl --depth 2 --only-subpaths -o ./tailscale_kb
 
 # Remote Scraping (Recommended for Termux/Dynamic sites)
 # Offloads the scraping (including Playwright/JS rendering) to your deployed server
@@ -153,6 +157,7 @@ poetry run pytest --cov=md_scraper
 ## 🏗️ Architecture
 
 -   `src/md_scraper/scraper.py`: Core `Scraper` class logic.
+-   `src/md_scraper/crawler.py`: Logic for recursive crawling and queue management.
 -   `src/md_scraper/cli.py`: CLI entry point and command definitions.
 -   `src/md_scraper/web/`: Flask application and Jinja2 templates.
 -   `tests/`: Unit and integration tests.

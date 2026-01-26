@@ -3,7 +3,9 @@ import json
 import os
 import base64
 import email
+import re
 from email import policy
+from urllib.parse import urljoin, urlparse
 from bs4 import BeautifulSoup
 from markdownify import markdownify as md
 
@@ -385,6 +387,104 @@ class Scraper:
 
         return markdown
 
+    def extract_nav_links(self, html: str, base_url: str) -> list:
+        """
+        Extracts navigation links from the HTML to facilitate smart crawling.
+        Prioritizes <nav>, <aside>, and sidebar-like elements.
+        
+        Args:
+            html (str): The raw HTML content.
+            base_url (str): The base URL to resolve relative links.
+            
+        Returns:
+            list: A list of absolute URLs found in the navigation sections.
+        """
+        soup = BeautifulSoup(html, 'lxml')
+        links = []
+        
+        # Heuristic: look for nav, aside, or divs with sidebar-like classes
+        nav_elements = soup.find_all(['nav', 'aside'])
+        nav_elements.extend(soup.find_all('div', class_=re.compile(r'sidebar|menu|nav|toc', re.I)))
+        
+        # Search scope: found elements, or fallback to body if none found
+        search_scope = nav_elements if nav_elements else [soup.body] if soup.body else [soup]
+
+        base_domain = urlparse(base_url).netloc
+        seen = set()
+        
+        for element in search_scope:
+            if not element: continue
+            for a in element.find_all('a', href=True):
+                href = a['href']
+                full_url = urljoin(base_url, href)
+                parsed = urlparse(full_url)
+                
+                # Strict Filter: Must be same domain
+                if parsed.netloc != base_domain:
+                    continue
+                
+                # Filter: Remove anchors/fragments and queries to avoid dupes
+                clean_url = full_url.split('#')[0].split('?')[0]
+                
+                # Avoid self-ref
+                if clean_url == base_url.split('#')[0].split('?')[0]:
+                    continue
+
+                if clean_url in seen:
+                    continue
+                    
+                seen.add(clean_url)
+                links.append(clean_url)
+                
+        return links
+
+    def extract_links(self, html: str, base_url: str) -> list:
+        """
+        Extracts all unique internal links from the HTML.
+        
+        Args:
+            html (str): The raw HTML content.
+            base_url (str): The base URL to resolve relative links.
+            
+        Returns:
+            list: A list of absolute URLs found on the page.
+        """
+        soup = BeautifulSoup(html, 'lxml')
+        links = []
+        base_domain = urlparse(base_url).netloc
+        seen = set()
+
+        for a in soup.find_all('a', href=True):
+            href = a['href']
+            # Skip empty or javascript links
+            if not href or href.startswith(('javascript:', 'mailto:', 'tel:')):
+                continue
+
+            full_url = urljoin(base_url, href)
+            parsed = urlparse(full_url)
+            
+            # Strict Filter: Must be same domain
+            if parsed.netloc != base_domain:
+                continue
+            
+            # Filter: Remove anchors/fragments and queries to avoid dupes
+            # Keep query params? Usually crawling wants unique pages. 
+            # For KB/Docs, queries might be search params (skip) or versioning (maybe keep).
+            # For safety/simplicity, let's strip them for now unless they seem vital.
+            clean_url = full_url.split('#')[0].split('?')[0]
+            
+            # Avoid self-ref
+            if clean_url == base_url.split('#')[0].split('?')[0]:
+                continue
+
+            if clean_url in seen:
+                continue
+                
+            seen.add(clean_url)
+            links.append(clean_url)
+            
+        return links
+
     def scrape(self, url: str, dynamic: bool = False, **options) -> dict:
         """
         Orchestrates the full scraping flow: fetch, extract metadata, 
@@ -396,7 +496,7 @@ class Scraper:
             **options: Additional options for Markdown conversion.
             
         Returns:
-            dict: A dictionary containing 'url', 'metadata', 'markdown', and 'raw_html'.
+            dict: A dictionary containing 'url', 'metadata', 'markdown', 'raw_html', and 'nav_links'.
         """
         if dynamic:
             html = self.fetch_html_dynamic(url)
@@ -407,9 +507,15 @@ class Scraper:
         main_html = self.extract_main_content(html)
         markdown = self.to_markdown(main_html, **options)
         
+        # Extract potential navigation links for crawler
+        nav_links = self.extract_nav_links(html, url)
+        internal_links = self.extract_links(html, url)
+        
         return {
             'url': url,
             'metadata': metadata,
             'markdown': markdown,
-            'raw_html': html
+            'raw_html': html,
+            'nav_links': nav_links,
+            'internal_links': internal_links
         }

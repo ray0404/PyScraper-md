@@ -5,6 +5,7 @@ import re
 import time
 from md_scraper.scraper import Scraper
 from md_scraper.utils import sanitize_filename, get_title_from_result
+from md_scraper.crawler import Crawler
 
 def process_url_logic(url, server, dynamic, strip, svg_action, image_action, assets_dir):
     """Helper to process a single URL (local or remote). Returns result dict."""
@@ -54,13 +55,17 @@ def cli():
 @click.option('--image-action', type=click.Choice(['remote', 'base64', 'file']), default='remote', help='Action for <img> tags (default: remote).')
 @click.option('--assets-dir', help='Directory to save images if using "file" action.')
 @click.option('--server', help='Remote scraper server URL (e.g., https://my-scraper.run.app). If set, scraping happens remotely.')
-def scrape(urls, output, dynamic, strip, svg_action, image_action, assets_dir, server):
+@click.option('--crawl', '-c', is_flag=True, default=False, help='Recursively crawl links found on the page.')
+@click.option('--depth', type=int, default=3, help='Crawling depth (default: 3).')
+@click.option('--max-pages', type=int, default=10, help='Maximum number of pages to crawl per initial URL (default: 10).')
+@click.option('--only-subpaths', is_flag=True, default=False, help='Restrict crawling to subpaths of the initial URL(s).')
+def scrape(urls, output, dynamic, strip, svg_action, image_action, assets_dir, server, crawl, depth, max_pages, only_subpaths):
     """Scrape URL(s) and print/save Markdown.
     
     URLS can be web links or a path to a text file containing URLs.
     """
     
-    target_urls = []
+    initial_target_urls = []
     
     # ... (existing parsing code) ...
     for u in urls:
@@ -68,38 +73,48 @@ def scrape(urls, output, dynamic, strip, svg_action, image_action, assets_dir, s
             # Check extension to decide if it's a target file or a list of URLs
             ext = os.path.splitext(u)[1].lower()
             if ext in ['.html', '.htm', '.mht', '.mhtml']:
-                target_urls.append(u)
+                initial_target_urls.append(u)
             else:
                 try:
                     with open(u, 'r') as f:
                         lines = [line.strip() for line in f if line.strip() and not line.strip().startswith('#')]
-                        target_urls.extend(lines)
+                        initial_target_urls.extend(lines)
                 except Exception as e:
                     click.echo(f"Error reading file {u}: {e}", err=True)
         else:
-            target_urls.append(u)
+            initial_target_urls.append(u)
             
-    if not target_urls:
+    if not initial_target_urls:
         click.echo("No URLs provided.", err=True)
         return
 
-    count = len(target_urls)
-    is_batch = count > 1
-    
-    # 2. Prepare Output Directory if batch mode
-    if is_batch and output:
-        if not os.path.exists(output):
-            os.makedirs(output)
-        elif os.path.isfile(output):
-             click.echo(f"Error: Output '{output}' is a file, but multiple URLs were provided. Please specify a directory.", err=True)
+    # Check output directory constraint early
+    count = len(initial_target_urls)
+    # If crawling is enabled, we will definitely have multiple files, so enforce directory output if output is specified
+    if output and (count > 1 or crawl):
+         if os.path.exists(output) and os.path.isfile(output):
+             click.echo(f"Error: Output '{output}' is a file. When crawling or scraping multiple URLs, please specify a directory.", err=True)
              raise click.Abort()
+         if not os.path.exists(output):
+             os.makedirs(output)
 
     # 3. Process Loop
-    for i, url in enumerate(target_urls):
-        prefix = f"[{i+1}/{count}] " if is_batch else ""
-        if is_batch:
-            click.echo(f"{prefix}Scraping {url}...", err=True)
-            
+    if crawl:
+        iterator = Crawler(initial_target_urls, max_depth=depth, max_pages=max_pages, only_subpaths=only_subpaths)
+    else:
+        # Simple iterator for non-crawl mode
+        iterator = zip(initial_target_urls, [0]*len(initial_target_urls))
+
+    processed_count = 0
+    
+    for current_url, current_depth in iterator:
+        processed_count += 1
+        prefix = f"[{processed_count}]" 
+        if crawl:
+            prefix += f" (Depth {current_depth})"
+        
+        click.echo(f"{prefix} Scraping {current_url}...", err=True)
+
         try:
             # Handle automatic assets directory if using 'file' action
             current_assets_dir = assets_dir
@@ -110,36 +125,54 @@ def scrape(urls, output, dynamic, strip, svg_action, image_action, assets_dir, s
                 else:
                     current_assets_dir = 'assets'
 
-            result = process_url_logic(url, server, dynamic, strip, svg_action, image_action, current_assets_dir)
+            result = process_url_logic(current_url, server, dynamic, strip, svg_action, image_action, current_assets_dir)
             markdown = result.get('markdown', '')
             
             # Determine Output
             if output:
-                if is_batch or os.path.isdir(output):
-                    # Save to directory with auto-name
-                    title = get_title_from_result(result, url)
-                    filename = f"{title}.md"
-                    file_path = os.path.join(output, filename)
-                    
-                    with open(file_path, 'w') as f:
-                        f.write(markdown)
-                    click.echo(f"{prefix}Saved: {file_path}")
+                # Save to directory with auto-name
+                if not crawl and count == 1 and not os.path.isdir(output) and not output.endswith('/'):
+                        # Single file case
+                        file_path = output
                 else:
-                    # Single URL, explicit file path
-                    with open(output, 'w') as f:
-                        f.write(markdown)
-                    click.echo(f"Successfully scraped {url} to {output}")
+                    # Directory case
+                    title = get_title_from_result(result, current_url)
+                    # Sanitize more aggressively for filenames
+                    filename = f"{sanitize_filename(title)}.md"
+                    file_path = os.path.join(output, filename)
+                
+                with open(file_path, 'w') as f:
+                    f.write(markdown)
+                click.echo(f"  -> Saved: {file_path}")
             else:
                 # Print to stdout
-                if is_batch:
-                    click.echo(f"\n--- URL: {url} ---\n")
+                click.echo(f"\n--- URL: {current_url} ---\n")
                 click.echo(markdown)
+            
+            # Feed Crawler
+            if crawl and isinstance(iterator, Crawler):
+                # Try to get all internal links first
+                links = result.get('internal_links')
                 
+                # Fallback: if 'internal_links' is missing (e.g. older server version), 
+                # or empty, try 'nav_links' or manual extraction
+                if links is None:
+                    # Fallback extraction from raw_html
+                    raw_html = result.get('raw_html', '')
+                    if raw_html:
+                         # We instantiate a local Scraper just for link extraction
+                         temp_scraper = Scraper()
+                         links = temp_scraper.extract_links(raw_html, current_url)
+                    else:
+                         links = result.get('nav_links', [])
+
+                iterator.add_links(links, current_depth)
+                        
         except Exception as e:
-            click.echo(f"{prefix}Failed to scrape {url}: {e}", err=True)
-            # Don't abort batch on single failure
-            if not is_batch:
-                raise click.Abort()
+            click.echo(f"  -> Failed to scrape {current_url}: {e}", err=True)
+            # Don't abort batch on single failure, unless it's a single requested URL (non-crawl)
+            if not crawl and count == 1:
+                    raise click.Abort()
 
 @cli.command()
 def hello():

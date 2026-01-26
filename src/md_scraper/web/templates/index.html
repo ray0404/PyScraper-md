@@ -39,6 +39,28 @@
                     </label>
                 </div>
 
+                <fieldset>
+                    <legend>Crawling Options:</legend>
+                    <div class="grid">
+                        <label for="crawl">
+                            <input type="checkbox" id="crawl" name="crawl" {% if crawl %}checked{% endif %}>
+                            Enable Crawling
+                        </label>
+                         <label for="only_subpaths">
+                            <input type="checkbox" id="only_subpaths" name="only_subpaths" {% if only_subpaths %}checked{% endif %}>
+                            Only Subpaths
+                        </label>
+                        <label for="depth">
+                            Depth
+                            <input type="number" id="depth" name="depth" value="{{ depth or 3 }}" min="1" max="10">
+                        </label>
+                        <label for="max_pages">
+                            Max Pages
+                            <input type="number" id="max_pages" name="max_pages" value="{{ max_pages or 10 }}" min="1" max="100">
+                        </label>
+                    </div>
+                </fieldset>
+
                 <div class="grid">
                     <label for="svg_action">SVG Handling:
                         <select id="svg_action" name="svg_action">

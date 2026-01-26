@@ -43,18 +43,27 @@ The `Scraper` class is the heart of the application. Its pipeline is strictly se
 5.  **Transformation:**
     *   Converts the cleaned HTML DOM into GitHub Flavored Markdown (GFM) using `markdownify`.
     *   Handles relative-to-absolute URL conversion for images and links.
+6.  **Link Extraction:**
+    *   `extract_links`: Extracts all same-domain links for the Crawler.
 
-### 2.2 Interface Layers
+### 2.2 Crawler Engine (`src/md_scraper/crawler.py`)
+The `Crawler` class manages the recursive scraping process:
+*   **Queue Management:** Implements Breadth-First Search (BFS).
+*   **State Tracking:** Tracks visited URLs and current depth.
+*   **Filtering:** Enforces domain confinement (`same_domain=True`) and optional subpath restriction (`only_subpaths=True`).
+
+### 2.3 Interface Layers
 *   **CLI (`src/md_scraper/cli.py`):**
     *   Built with `Click`.
     *   Handles argument parsing, file I/O, and batch processing logic.
+    *   **Crawling:** Exposes flags `--crawl`, `--depth`, `--only-subpaths`.
     *   **Remote Offloading:** Logic exists to serialize CLI arguments into a JSON payload and POST them to the Cloud Run instance.
 *   **Web/API (`src/md_scraper/web/app.py`):**
     *   Built with `Flask`.
     *   **UI:** Renders Jinja2 templates (`src/md_scraper/web/templates/`) styled with `Pico.css`.
-    *   **API (`/api/scrape`):** Accepts JSON payloads, executes `Scraper`, and returns JSON responses.
+    *   **API (`/api/scrape`):** Accepts JSON payloads (including crawling params), executes `Scraper`/`Crawler`, and returns JSON responses.
 
-### 2.3 Deployment Architecture
+### 2.4 Deployment Architecture
 *   **Containerization:** `Dockerfile` is optimized for Cloud Run.
     *   Base: `python:3.12-slim`.
     *   Browsers: Installs Playwright dependencies + Chromium.
@@ -96,6 +105,7 @@ The `Scraper` class is the heart of the application. Its pipeline is strictly se
 | `GEMINI.md` | **Context Master.** The high-level map of the project. |
 | `pyproject.toml` | Build system, dependencies, and tool configuration. |
 | `src/md_scraper/scraper.py` | **Core Logic.** HTML fetching, cleaning, and conversion. |
+| `src/md_scraper/crawler.py` | **Crawler Logic.** Recursive link following and queue. |
 | `src/md_scraper/cli.py` | CLI command definitions and argument handling. |
 | `src/md_scraper/web/app.py` | Flask web server and API routes. |
 | `tests/` | Test suite. Mirroring the `src` structure is encouraged. |
