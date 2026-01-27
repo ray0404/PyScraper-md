@@ -43,15 +43,7 @@ def api_scrape():
             
             if crawl and isinstance(iterator, Crawler):
                 # Try to get all internal links first
-                links = res.get('internal_links')
-                if links is None:
-                    # Fallback extraction from raw_html if needed
-                    raw_html = res.get('raw_html', '')
-                    if raw_html:
-                         temp_scraper = Scraper()
-                         links = temp_scraper.extract_links(raw_html, current_url)
-                    else:
-                         links = res.get('nav_links', [])
+                links = res.get('internal_links') or []
                 
                 iterator.add_links(links, current_depth)
         
@@ -159,15 +151,7 @@ def index():
                         
                         if crawl and isinstance(iterator, Crawler):
                              # Try to get all internal links first
-                            links = res.get('internal_links')
-                            if links is None:
-                                # Fallback extraction from raw_html if needed
-                                raw_html = res.get('raw_html', '')
-                                if raw_html:
-                                    temp_scraper = Scraper()
-                                    links = temp_scraper.extract_links(raw_html, current_url)
-                                else:
-                                    links = res.get('nav_links', [])
+                            links = res.get('internal_links') or []
                             
                             iterator.add_links(links, current_depth)
 
