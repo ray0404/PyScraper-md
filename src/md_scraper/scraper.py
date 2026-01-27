@@ -4,6 +4,7 @@ import os
 import base64
 import email
 import re
+from typing import Union
 from email import policy
 from urllib.parse import urljoin, urlparse
 from bs4 import BeautifulSoup
@@ -166,7 +167,7 @@ class Scraper:
             finally:
                 browser.close()
 
-    def extract_main_content(self, html: str) -> str:
+    def extract_main_content(self, html: Union[str, BeautifulSoup]) -> str:
         """
         Extracts the primary content area from an HTML string, removing boilerplate.
         
@@ -174,12 +175,15 @@ class Scraper:
         Non-content elements such as <nav>, <footer>, <script>, and <style> are removed.
         
         Args:
-            html (str): The raw HTML content.
+            html (Union[str, BeautifulSoup]): The raw HTML content or BeautifulSoup object.
             
         Returns:
             str: The HTML string containing only the main content area.
         """
-        soup = BeautifulSoup(html, 'lxml')
+        if isinstance(html, str):
+            soup = BeautifulSoup(html, 'lxml')
+        else:
+            soup = html
         
         # Remove boilerplate
         for tag in soup(['nav', 'footer', 'header', 'aside', 'script', 'style']):
@@ -198,19 +202,23 @@ class Scraper:
         # Fallback to body if nothing found
         return str(soup.body) if soup.body else str(soup)
 
-    def extract_metadata(self, html: str) -> dict:
+    def extract_metadata(self, html: Union[str, BeautifulSoup]) -> dict:
         """
         Extracts metadata (title, author, date, etc.) from an HTML string.
         
         Supports JSON-LD, OpenGraph, and standard meta tags.
         
         Args:
-            html (str): The raw HTML content.
+            html (Union[str, BeautifulSoup]): The raw HTML content or BeautifulSoup object.
             
         Returns:
             dict: A dictionary containing extracted metadata fields.
         """
-        soup = BeautifulSoup(html, 'lxml')
+        if isinstance(html, str):
+            soup = BeautifulSoup(html, 'lxml')
+        else:
+            soup = html
+
         metadata = {
             'title': None,
             'description': None,
@@ -387,19 +395,23 @@ class Scraper:
 
         return markdown
 
-    def extract_nav_links(self, html: str, base_url: str) -> list:
+    def extract_nav_links(self, html: Union[str, BeautifulSoup], base_url: str) -> list:
         """
         Extracts navigation links from the HTML to facilitate smart crawling.
         Prioritizes <nav>, <aside>, and sidebar-like elements.
         
         Args:
-            html (str): The raw HTML content.
+            html (Union[str, BeautifulSoup]): The raw HTML content or BeautifulSoup object.
             base_url (str): The base URL to resolve relative links.
             
         Returns:
             list: A list of absolute URLs found in the navigation sections.
         """
-        soup = BeautifulSoup(html, 'lxml')
+        if isinstance(html, str):
+            soup = BeautifulSoup(html, 'lxml')
+        else:
+            soup = html
+
         links = []
         
         # Heuristic: look for nav, aside, or divs with sidebar-like classes
@@ -438,18 +450,22 @@ class Scraper:
                 
         return links
 
-    def extract_links(self, html: str, base_url: str) -> list:
+    def extract_links(self, html: Union[str, BeautifulSoup], base_url: str) -> list:
         """
         Extracts all unique internal links from the HTML.
         
         Args:
-            html (str): The raw HTML content.
+            html (Union[str, BeautifulSoup]): The raw HTML content or BeautifulSoup object.
             base_url (str): The base URL to resolve relative links.
             
         Returns:
             list: A list of absolute URLs found on the page.
         """
-        soup = BeautifulSoup(html, 'lxml')
+        if isinstance(html, str):
+            soup = BeautifulSoup(html, 'lxml')
+        else:
+            soup = html
+
         links = []
         base_domain = urlparse(base_url).netloc
         seen = set()
@@ -503,13 +519,19 @@ class Scraper:
         else:
             html = self.fetch_html(url)
             
-        metadata = self.extract_metadata(html)
-        main_html = self.extract_main_content(html)
-        markdown = self.to_markdown(main_html, **options)
+        # Parse once to avoid redundant parsing
+        soup = BeautifulSoup(html, 'lxml')
+
+        # Read-only operations first
+        metadata = self.extract_metadata(soup)
+        nav_links = self.extract_nav_links(soup, url)
+        internal_links = self.extract_links(soup, url)
         
-        # Extract potential navigation links for crawler
-        nav_links = self.extract_nav_links(html, url)
-        internal_links = self.extract_links(html, url)
+        # Destructive operation last (modifies soup)
+        main_html = self.extract_main_content(soup)
+
+        # Convert to markdown
+        markdown = self.to_markdown(main_html, **options)
         
         return {
             'url': url,
