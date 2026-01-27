@@ -23,6 +23,47 @@ class Scraper:
     using heuristics, and converting the resulting DOM to GitHub Flavored Markdown.
     """
 
+    def __init__(self):
+        self._playwright = None
+        self._browser = None
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close()
+
+    def close(self):
+        """Closes the browser and Playwright instance if they are active."""
+        if self._browser:
+            self._browser.close()
+            self._browser = None
+        if self._playwright:
+            self._playwright.stop()
+            self._playwright = None
+
+    def _ensure_browser(self):
+        """Lazily initializes Playwright and the Browser instance."""
+        if sync_playwright is None:
+            raise ImportError("Playwright is not installed. Please install it with 'pip install playwright' and 'playwright install'.")
+
+        if not self._playwright:
+            self._playwright = sync_playwright().start()
+
+        if not self._browser:
+            # Check for CHROMIUM_PATH environment variable (useful for Termux/custom setups)
+            executable_path = os.environ.get("CHROMIUM_PATH")
+            launch_args = {
+                "headless": True
+            }
+            if executable_path:
+                launch_args["executable_path"] = executable_path
+                launch_args["args"] = ['--no-sandbox', '--disable-gpu'] # Often needed for custom binaries
+
+            self._browser = self._playwright.chromium.launch(**launch_args)
+
+        return self._browser
+
     def fetch_html(self, url: str) -> str:
         """
         Fetches the raw HTML content from a given URL or local file.
@@ -107,64 +148,51 @@ class Scraper:
             ImportError: If Playwright is not installed.
             Exception: If browser launch or page navigation fails.
         """
-        if sync_playwright is None:
-            raise ImportError("Playwright is not installed. Please install it with 'pip install playwright' and 'playwright install'.")
+        browser = self._ensure_browser()
+        page = browser.new_page()
+        try:
+            # Set a reasonable viewport size
+            page.set_viewport_size({"width": 1280, "height": 800})
+            page.goto(url, wait_until="networkidle")
 
-        with sync_playwright() as p:
-            # Check for CHROMIUM_PATH environment variable (useful for Termux/custom setups)
-            executable_path = os.environ.get("CHROMIUM_PATH")
-            launch_args = {
-                "headless": True
-            }
-            if executable_path:
-                launch_args["executable_path"] = executable_path
-                launch_args["args"] = ['--no-sandbox', '--disable-gpu'] # Often needed for custom binaries
+            # Bake computed styles into SVGs so they render correctly in Markdown
+            page.evaluate("""() => {
+                document.querySelectorAll('svg').forEach(svg => {
+                    const style = window.getComputedStyle(svg);
+                    const rect = svg.getBoundingClientRect();
 
-            browser = p.chromium.launch(**launch_args)
-            try:
-                page = browser.new_page()
-                # Set a reasonable viewport size
-                page.set_viewport_size({"width": 1280, "height": 800})
-                page.goto(url, wait_until="networkidle")
-                
-                # Bake computed styles into SVGs so they render correctly in Markdown
-                page.evaluate("""() => {
-                    document.querySelectorAll('svg').forEach(svg => {
-                        const style = window.getComputedStyle(svg);
-                        const rect = svg.getBoundingClientRect();
-                        
-                        // 1. Bake dimensions based on actual rendered size
-                        // Use rect if it's non-zero, otherwise fallback to reasonable defaults
-                        const width = rect.width > 0 ? rect.width : (parseInt(svg.getAttribute('width')) || 16);
-                        const height = rect.height > 0 ? rect.height : (parseInt(svg.getAttribute('height')) || 16);
-                        
-                        svg.setAttribute('width', width);
-                        svg.setAttribute('height', height);
-                        
-                        // 2. Bake colors from computed styles
-                        if (svg.getAttribute('fill') === 'currentColor' || !svg.hasAttribute('fill')) {
-                            const fill = style.fill !== 'none' ? style.fill : (style.color || '#000000');
-                            svg.setAttribute('fill', fill);
-                        }
-                        if (svg.getAttribute('stroke') === 'currentColor') {
-                            svg.setAttribute('stroke', style.stroke || style.color || '#000000');
-                        }
+                    // 1. Bake dimensions based on actual rendered size
+                    // Use rect if it's non-zero, otherwise fallback to reasonable defaults
+                    const width = rect.width > 0 ? rect.width : (parseInt(svg.getAttribute('width')) || 16);
+                    const height = rect.height > 0 ? rect.height : (parseInt(svg.getAttribute('height')) || 16);
 
-                        // 3. Force visibility (many icons are hidden/transparent by default until hover)
-                        svg.style.opacity = '1';
-                        svg.style.visibility = 'visible';
-                        svg.style.display = 'inline-block';
-                        
-                        // 4. Clean up to reduce Base64 bloat and avoid CSS interference
-                        svg.removeAttribute('class');
-                        // We keep the style attribute briefly then clean it if it contains complex logic
-                    });
-                }""")
+                    svg.setAttribute('width', width);
+                    svg.setAttribute('height', height);
 
-                content = page.content()
-                return content
-            finally:
-                browser.close()
+                    // 2. Bake colors from computed styles
+                    if (svg.getAttribute('fill') === 'currentColor' || !svg.hasAttribute('fill')) {
+                        const fill = style.fill !== 'none' ? style.fill : (style.color || '#000000');
+                        svg.setAttribute('fill', fill);
+                    }
+                    if (svg.getAttribute('stroke') === 'currentColor') {
+                        svg.setAttribute('stroke', style.stroke || style.color || '#000000');
+                    }
+
+                    // 3. Force visibility (many icons are hidden/transparent by default until hover)
+                    svg.style.opacity = '1';
+                    svg.style.visibility = 'visible';
+                    svg.style.display = 'inline-block';
+
+                    // 4. Clean up to reduce Base64 bloat and avoid CSS interference
+                    svg.removeAttribute('class');
+                    // We keep the style attribute briefly then clean it if it contains complex logic
+                });
+            }""")
+
+            content = page.content()
+            return content
+        finally:
+            page.close()
 
     def extract_main_content(self, html: str) -> str:
         """
