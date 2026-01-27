@@ -1,5 +1,6 @@
 from typing import Set, List, Dict, Optional
 from urllib.parse import urlparse
+from collections import deque
 
 class Crawler:
     """
@@ -7,7 +8,7 @@ class Crawler:
     """
     def __init__(self, start_urls: List[str], max_depth: int = 3, max_pages: int = 50, same_domain: bool = True, only_subpaths: bool = False):
         # Queue stores tuples of (url, depth)
-        self.queue = [(url, 0) for url in start_urls]
+        self.queue = deque([(url, 0) for url in start_urls])
         self.visited: Set[str] = set(start_urls)
         self.max_depth = max_depth
         self.max_pages = max_pages
@@ -29,7 +30,7 @@ class Crawler:
         if not self.queue or self.crawled_count >= self.max_pages:
             raise StopIteration
         
-        url, depth = self.queue.pop(0)
+        url, depth = self.queue.popleft()
         self.crawled_count += 1
         return url, depth
 
