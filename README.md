@@ -3,172 +3,257 @@
 [![Python Version](https://img.shields.io/badge/python-3.12%2B-blue.svg)](https://www.python.org/)
 [![Poetry](https://img.shields.io/badge/package%20manager-poetry-blueviolet.svg)](https://python-poetry.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Docker](https://img.shields.io/badge/docker-ready-blue.svg)](https://www.docker.com/)
 
-A robust, developer-centric Python web scraper designed to transform complex web content into clean, high-fidelity **GitHub Flavored Markdown (GFM)**. Perfect for archival, research, LLM context gathering, and technical documentation.
+A robust, developer-centric Python web scraper designed to transform complex web content into clean, high-fidelity **GitHub Flavored Markdown (GFM)**. 
+
+Built for archival, LLM context gathering, research, and technical documentation. It handles everything from static blogs to complex, JavaScript-heavy Single Page Applications (SPAs).
 
 ## ✨ Key Features
 
--   **Intelligent Extraction:** Uses heuristics to identify the main content area (article, main, etc.) while stripping away navigation, ads, and footers.
--   **Recursive Crawling:** Built-in crawler to fetch linked pages up to a specified depth, with optional subpath restriction.
--   **High-Fidelity GFM:** Produces clean Markdown including tables, code blocks (with language detection), and links.
--   **Static & Dynamic Support:** 
-    -   Fast static scraping using `BeautifulSoup4` & `requests`.
-    -   Robust dynamic scraping for JS-heavy SPAs using `Playwright`.
--   **Metadata Extraction:** Automatically captures title, author, date, and descriptions from JSON-LD, OpenGraph, and standard meta tags.
+-   **Intelligent Extraction:** Heuristically identifies main content, stripping navigation, ads, and footers.
+-   **Recursive Crawling:** Spiders through links to a specified depth and page limit.
+-   **High-Fidelity GFM:** Preserves tables, code blocks (with language detection), and rich text formatting.
+-   **Asset Management:**
+    -   **Images:** Keep as remote URLs, convert to Base64, or download locally.
+    -   **SVGs:** Render as images, preserve code, strip, or save to file.
+-   **Local & Remote Sources:** Scrape live URLs or local HTML files.
+-   **Dual Engines:** 
+    -   **Static:** Fast `requests` + `BeautifulSoup4` for simple sites.
+    -   **Dynamic:** Full `Playwright` integration for JS-heavy sites.
 -   **Multiple Interfaces:** 
-    -   **CLI:** Powerful command-line tool for terminal workflows.
-    -   **Web UI:** Lightweight Flask-based interface for browser-based scraping.
-    -   **Python Library:** Clean API for integration into your own Python projects.
--   **Highly Configurable:** Toggle image stripping, link removal, and more.
+    -   **CLI:** Powerful terminal tool with rich flags.
+    -   **Web UI:** Flask-based interface for browser workflows.
+    -   **Library:** Clean Python API for integration.
+-   **Remote Offloading:** Delegate heavy lifting (Playwright) to a remote Cloud Run instance (ideal for Termux/mobile).
 
 ## 🛠️ Tech Stack
 
--   **Backend:** Python 3.12+
--   **Scraping:** `BeautifulSoup4`, `Playwright`, `requests`, `lxml`
+-   **Core:** Python 3.12+
+-   **Parsing:** `BeautifulSoup4`, `lxml`
 -   **Conversion:** `markdownify`
--   **CLI:** `Click`
--   **Web UI:** `Flask` + `Pico.css`
--   **Testing:** `pytest`, `pytest-cov`, `pytest-flask`
+-   **Browser Automation:** `Playwright`
+-   **CLI:** `click`
+-   **Web:** `Flask`, `gunicorn`, `Pico.css`
+-   **Testing:** `pytest` ecosystem
 
 ## 🚀 Getting Started
 
 ### Prerequisites
 
--   [Poetry](https://python-poetry.org/docs/#installation) installed on your system.
+-   **Python 3.12+**
+-   **Poetry** (Recommended) or `pip`
+-   **Playwright Browsers** (for dynamic scraping)
 
 ### Installation
+
+#### 1. Clone & Install Dependencies
 
 ```bash
 git clone https://github.com/yourusername/md-scraper.git
 cd md-scraper
 poetry install
+```
 
-# For global CLI access (optional but recommended):
+#### 2. Install Playwright Browsers (Optional)
+
+Required only if you plan to use `--dynamic` mode locally:
+
+```bash
+poetry run playwright install chromium
+```
+
+#### 3. Global CLI Access (Optional)
+
+```bash
 pip install --editable .
 ```
 
-**Note for Termux users:**
-If developing on Android/Termux, install Chromium via `pkg install chromium` and set the `CHROMIUM_PATH` environment variable. `Playwright` installation via pip is not supported on Termux; use the `--server` option (see below) or the Web UI for dynamic scraping.
+### Termux / Android Setup
 
-### Usage
+If running on Android via Termux, local Playwright is **not supported**. You have two options:
+1.  **Remote Mode:** Use the `--server` flag to offload processing to a deployed instance.
+2.  **Static Mode:** Use the default static scraper (no JS execution).
+3.  **Chromium (Experimental):** Install `pkg install chromium` and set `CHROMIUM_PATH`.
 
-#### Command Line Interface (CLI)
+## 📖 Usage Guide
 
-The CLI is available via the `scraper` command (if installed globally) or via `poetry run scraper`:
+### Command Line Interface (CLI)
+
+The `scraper` command is your primary tool.
+
+#### Basic Scraping
 
 ```bash
-# Scrape a static page to stdout
+# Scrape a single URL to stdout
 scraper scrape https://example.com/article
 
-# Scrape and save to a file
-scraper scrape https://example.com/article -o my_article.md
+# Save to file
+scraper scrape https://example.com/article -o article.md
 
-# Crawl a knowledge base (depth 2, only subpaths)
-scraper scrape https://tailscale.com/kb/ --crawl --depth 2 --only-subpaths -o ./tailscale_kb
-
-# Remote Scraping (Recommended for Termux/Dynamic sites)
-# Offloads the scraping (including Playwright/JS rendering) to your deployed server
-scraper scrape https://react-site.com --server https://scraper-751660269987.us-central1.run.app
-
-# Dynamic scraping (Local - requires Playwright installed)
-scraper scrape https://react-site.com --dynamic
-
-# Strip specific tags (e.g., remove all images and links)
-scraper scrape https://example.com -s img -s a
+# Scrape a local file
+scraper scrape path/to/local/file.html -o output.md
 ```
 
-#### Interactive Batch Script (`scraper-go`)
+#### Asset Handling (Images & SVGs)
 
-An interactive Bash script is included for easy batch processing and file management.
+Control how assets are processed:
+
+```bash
+# Download images and SVGs to an 'assets' folder
+scraper scrape https://example.com \
+  --image-action file \
+  --svg-action file \
+  --assets-dir ./my-assets \
+  -o ./output/page.md
+
+# Convert images to Base64 (inline)
+scraper scrape https://example.com --image-action base64
+
+# Strip all images and SVGs
+scraper scrape https://example.com --strip img --svg-action strip
+```
+
+| Flag | Options | Description |
+|------|---------|-------------|
+| `--image-action` | `remote` (default), `base64`, `file` | How to handle `<img>` tags. |
+| `--svg-action` | `image` (default), `preserve`, `strip`, `file` | How to handle inline `<svg>` tags. |
+| `--assets-dir` | `<path>` | Directory to save assets when `file` action is used. |
+
+#### Recursive Crawling
+
+Crawl a documentation site or blog:
+
+```bash
+scraper scrape https://tailscale.com/kb/ \
+  --crawl \
+  --depth 2 \
+  --max-pages 20 \
+  --only-subpaths \
+  -o ./tailscale-docs
+```
+
+-   `--crawl`: Enable crawling.
+-   `--depth <int>`: How deep to follow links (default: 3).
+-   `--only-subpaths`: Only follow links that are children of the starting URL.
+
+#### Dynamic Sites & Remote Offloading
+
+For Single Page Applications (React, Vue, etc.):
+
+```bash
+# Local Dynamic (requires Playwright)
+scraper scrape https://spa-site.com --dynamic
+
+# Remote Offloading (Recommended for Termux/Low-resource)
+scraper scrape https://spa-site.com \
+  --server https://scraper-751660269987.us-central1.run.app
+```
+
+### Interactive Batch Mode
+
+The `scraper-go.sh` script provides a user-friendly wizard for batch jobs.
 
 ```bash
 ./scraper-go.sh
 ```
 
 **Features:**
-*   **Interactive Input:** Accepts single URL, multiple URLs (space-separated), or a `.txt` batch file.
-*   **Auto-Naming:** Automatically generates filenames based on the page title (H1/H2).
-*   **Batch Organization:** Options to save all outputs to a specific directory.
-*   **Remote Enabled:** Configured to use your deployed Cloud Run instance by default.
+-   Enter URLs manually or provide a `.txt` list.
+-   Auto-detects page titles for filenames.
+-   Organizes output into folders.
+-   Defaults to remote server for reliability.
 
-#### Web Interface
+### Web Interface
 
-Start the local development server:
+Run the lightweight Flask UI:
 
 ```bash
 poetry run python src/md_scraper/web/app.py
 ```
-Open your browser and navigate to `http://127.0.0.1:8080`.
+Access at `http://127.0.0.1:8080`.
 
-Run dev server "with persistence" (no hangups):
+### Python Library Usage
 
-```bash
-nohup poetry run python src/md_scraper/web/app.py > app.log 2>&1 &
-```
-
-#### Docker
-
-You can build and run the application in a Docker container. This is useful for isolating the environment and ensuring all dependencies (including Playwright browsers) are correctly installed.
-
-**Build the image:**
-```bash
-docker build -t scraper .
-```
-
-**Run the container:**
-```bash
-# Run on port 8080
-docker run -p 8080:8080 --name scraper_container scraper
-```
-
-**Note:** If port 8080 is already in use, you may need to kill the process using it or map to a different port (e.g., `-p 8081:8080`).
-
-#### Cloud Deployment
-
-The application is live on Google Cloud Run:
-**[https://scraper-751660269987.us-central1.run.app](https://scraper-751660269987.us-central1.run.app)**
-
-It exposes a REST API at `/api/scrape` for remote CLI usage.
-
-#### As a Python Library
+Integrate into your own scripts:
 
 ```python
 from md_scraper.scraper import Scraper
 
+# Initialize
 scraper = Scraper()
-result = scraper.scrape("https://example.com/blog-post", dynamic=False)
 
-print(result['metadata']['title'])
-print(result['markdown'])
+# Scrape
+result = scraper.scrape(
+    "https://example.com",
+    dynamic=True,
+    image_action='base64'
+)
+
+# Access Data
+print(f"Title: {result['metadata']['title']}")
+print(f"Markdown:\n{result['markdown']}")
+```
+
+## 🐳 Docker Support
+
+Isolate the environment with Docker.
+
+```bash
+# Build
+docker build -t scraper .
+
+# Run
+docker run -p 8080:8080 scraper
 ```
 
 ## 🧪 Testing
 
-We maintain a comprehensive test suite with high coverage.
+Run the test suite to ensure reliability.
 
 ```bash
 # Run all tests
 poetry run pytest
 
-# Run with coverage report
+# Check coverage
 poetry run pytest --cov=md_scraper
 ```
 
 ## 🏗️ Architecture
 
--   `src/md_scraper/scraper.py`: Core `Scraper` class logic.
--   `src/md_scraper/crawler.py`: Logic for recursive crawling and queue management.
--   `src/md_scraper/cli.py`: CLI entry point and command definitions.
--   `src/md_scraper/web/`: Flask application and Jinja2 templates.
--   `tests/`: Unit and integration tests.
+```
+src/md_scraper/
+├── cli.py          # Command-line entry point
+├── scraper.py      # Core extraction & cleaning logic
+├── crawler.py      # Recursive crawling engine
+├── utils.py        # Helper functions (sanitization, headers)
+└── web/
+    ├── app.py
+    └── templates/
+```
+
+## ☁️ Deployment
+
+The project is optimized for **Google Cloud Run**.
+
+**Live Demo:** [https://scraper-751660269987.us-central1.run.app](https://scraper-751660269987.us-central1.run.app)
+
+**Deploy Command:**
+```bash
+gcloud run deploy scraper \
+  --source . \
+  --region us-central1 \
+  --allow-unauthenticated
+```
 
 ## 🤝 Contributing
 
-Contributions are welcome! Please ensure you:
-1.  Follow the existing code style (Google-style docstrings).
-2.  Add tests for any new features or bug fixes.
-3.  Ensure the full test suite passes.
+1.  Fork the repository.
+2.  Create a feature branch (`git checkout -b feature/amazing-feature`).
+3.  Commit changes (`git commit -m 'Add amazing feature'`).
+4.  Push to branch (`git push origin feature/amazing-feature`).
+5.  Open a Pull Request.
 
 ## 📄 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+Distributed under the MIT License. See `LICENSE` for more information.
