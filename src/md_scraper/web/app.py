@@ -47,13 +47,8 @@ def api_scrape():
                 
                 iterator.add_links(links, current_depth)
         
-        # If single URL request without crawl, return dict as before for backward compat?
-        # But if crawl is ON, we must return list.
-        # To be safe for API, let's keep original behavior for non-crawl single url, 
-        # but the request structure implied batch processing might be better.
-        # However, the original code returned a single dict for /api/scrape.
-        # If crawl is enabled, we return a list of results wrapped in a dict or just the first result?
-        # Standard: return list if crawl=True.
+        # Return a list of results when crawling to support multiple pages.
+        # For a single URL request (crawl=False), return a single dict for backward compatibility.
         if crawl:
              return jsonify({'results': results})
         else:
