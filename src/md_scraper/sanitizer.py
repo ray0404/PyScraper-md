@@ -18,9 +18,9 @@ class MarkdownSanitizer:
             # 3. Fix headers that don't have a space after #
             (r'^(#+)([^#\s])', r'\1 \2'),
             
-            # 4. Remove empty links/images
-            (r'\[\]\([^\)]*\)', ''),
-            (r'!\[\]\([^\)]*\)', ''),
+            # 4. Remove empty links/images (only if they are truly empty)
+            (r'\[\s*\]\(\s*\)', ''),
+            (r'!\[\s*\]\(\s*\)', ''),
             
             # 5. Clean up residue HTML comments if they weren't stripped
             (r'<!--.*?-->', ''),
