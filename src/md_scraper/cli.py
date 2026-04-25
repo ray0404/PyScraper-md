@@ -7,7 +7,7 @@ from md_scraper.scraper import Scraper
 from md_scraper.utils import sanitize_filename, get_title_from_result
 from md_scraper.crawler import Crawler
 
-def process_url_logic(url, server, dynamic, strip, svg_action, image_action, assets_dir):
+def process_url_logic(url, server, dynamic, strip, svg_action, image_action, assets_dir, scraper=None):
     """Helper to process a single URL (local or remote). Returns result dict."""
     if server:
         # Remote scraping mode
@@ -29,18 +29,30 @@ def process_url_logic(url, server, dynamic, strip, svg_action, image_action, ass
             raise Exception(f"Connection error: {e}")
     else:
         # Local scraping mode
-        scraper = Scraper()
-        # Pass options to scrape method
-        scrape_options = {
-            'svg_action': svg_action,
-            'image_action': image_action,
-            'assets_dir': assets_dir,
-            'base_url': url
-        }
-        if strip:
-            scrape_options['strip'] = list(strip)
-            
-        return scraper.scrape(url, dynamic=dynamic, **scrape_options)
+        # Use provided scraper or create a temporary one
+        if scraper:
+            scrape_options = {
+                'svg_action': svg_action,
+                'image_action': image_action,
+                'assets_dir': assets_dir,
+                'base_url': url
+            }
+            if strip:
+                scrape_options['strip'] = list(strip)
+            return scraper.scrape(url, dynamic=dynamic, **scrape_options)
+        else:
+            with Scraper() as temp_scraper:
+                # Pass options to scrape method
+                scrape_options = {
+                    'svg_action': svg_action,
+                    'image_action': image_action,
+                    'assets_dir': assets_dir,
+                    'base_url': url
+                }
+                if strip:
+                    scrape_options['strip'] = list(strip)
+
+                return temp_scraper.scrape(url, dynamic=dynamic, **scrape_options)
 
 @click.group()
 def cli():
@@ -107,72 +119,85 @@ def scrape(urls, output, dynamic, strip, svg_action, image_action, assets_dir, s
 
     processed_count = 0
     
-    for current_url, current_depth in iterator:
-        processed_count += 1
-        prefix = f"[{processed_count}]" 
-        if crawl:
-            prefix += f" (Depth {current_depth})"
+    try:
+        # We use a context manager to reuse the Scraper instance across multiple URLs if local
+        # If server is provided, we don't need a local Scraper
+        from contextlib import nullcontext
+        scraper_cm = Scraper() if not server else nullcontext()
         
-        click.echo(f"{prefix} Scraping {current_url}...", err=True)
+        with scraper_cm as scraper:
+            for current_url, current_depth in iterator:
+                processed_count += 1
+                prefix = f"[{processed_count}]"
+                if crawl:
+                    prefix += f" (Depth {current_depth})"
 
-        try:
-            # Handle automatic assets directory if using 'file' action
-            current_assets_dir = assets_dir
-            if (svg_action == 'file' or image_action == 'file') and not current_assets_dir:
-                if output:
-                    base_path = output if os.path.isdir(output) else os.path.dirname(output)
-                    current_assets_dir = os.path.join(base_path or '.', 'assets')
-                else:
-                    current_assets_dir = 'assets'
+                click.echo(f"{prefix} Scraping {current_url}...", err=True)
 
-            result = process_url_logic(current_url, server, dynamic, strip, svg_action, image_action, current_assets_dir)
-            markdown = result.get('markdown', '')
+                try:
+                    # Handle automatic assets directory if using 'file' action
+                    current_assets_dir = assets_dir
+                    if (svg_action == 'file' or image_action == 'file') and not current_assets_dir:
+                        if output:
+                            base_path = output if os.path.isdir(output) else os.path.dirname(output)
+                            current_assets_dir = os.path.join(base_path or '.', 'assets')
+                        else:
+                            current_assets_dir = 'assets'
+
+                    result = process_url_logic(current_url, server, dynamic, strip, svg_action, image_action, current_assets_dir, scraper=scraper)
+                    markdown = result.get('markdown', '')
             
-            # Determine Output
-            if output:
-                # Save to directory with auto-name
-                if not crawl and count == 1 and not os.path.isdir(output) and not output.endswith('/'):
-                        # Single file case
-                        file_path = output
-                else:
-                    # Directory case
-                    title = get_title_from_result(result, current_url)
-                    # Sanitize more aggressively for filenames
-                    filename = f"{sanitize_filename(title)}.md"
-                    file_path = os.path.join(output, filename)
-                
-                with open(file_path, 'w') as f:
-                    f.write(markdown)
-                click.echo(f"  -> Saved: {file_path}")
-            else:
-                # Print to stdout
-                click.echo(f"\n--- URL: {current_url} ---\n")
-                click.echo(markdown)
-            
-            # Feed Crawler
-            if crawl and isinstance(iterator, Crawler):
-                # Try to get all internal links first
-                links = result.get('internal_links')
-                
-                # Fallback: if 'internal_links' is missing (e.g. older server version), 
-                # or empty, try 'nav_links' or manual extraction
-                if links is None:
-                    # Fallback extraction from raw_html
-                    raw_html = result.get('raw_html', '')
-                    if raw_html:
-                         # We instantiate a local Scraper just for link extraction
-                         temp_scraper = Scraper()
-                         links = temp_scraper.extract_links(raw_html, current_url)
+                    # Determine Output
+                    if output:
+                        # Save to directory with auto-name
+                        if not crawl and count == 1 and not os.path.isdir(output) and not output.endswith('/'):
+                                # Single file case
+                                file_path = output
+                        else:
+                            # Directory case
+                            title = get_title_from_result(result, current_url)
+                            # Sanitize more aggressively for filenames
+                            filename = f"{sanitize_filename(title)}.md"
+                            file_path = os.path.join(output, filename)
+
+                        with open(file_path, 'w') as f:
+                            f.write(markdown)
+                        click.echo(f"  -> Saved: {file_path}")
                     else:
-                         links = result.get('nav_links', [])
+                        # Print to stdout
+                        click.echo(f"\n--- URL: {current_url} ---\n")
+                        click.echo(markdown)
 
-                iterator.add_links(links, current_depth)
+                    # Feed Crawler
+                    if crawl and isinstance(iterator, Crawler):
+                        # Try to get all internal links first
+                        links = result.get('internal_links')
                         
-        except Exception as e:
-            click.echo(f"  -> Failed to scrape {current_url}: {e}", err=True)
-            # Don't abort batch on single failure, unless it's a single requested URL (non-crawl)
-            if not crawl and count == 1:
-                    raise click.Abort()
+                        # Fallback: if 'internal_links' is missing (e.g. older server version),
+                        # or empty, try 'nav_links' or manual extraction
+                        if links is None:
+                            # Fallback extraction from raw_html
+                            raw_html = result.get('raw_html', '')
+                            if raw_html:
+                                # Reuse existing scraper if available
+                                if scraper:
+                                    links = scraper.extract_links(raw_html, current_url)
+                                else:
+                                    with Scraper() as temp_scraper:
+                                        links = temp_scraper.extract_links(raw_html, current_url)
+                            else:
+                                links = result.get('nav_links', [])
+
+                        iterator.add_links(links, current_depth)
+
+                except Exception as e:
+                    click.echo(f"  -> Failed to scrape {current_url}: {e}", err=True)
+                    # Don't abort batch on single failure, unless it's a single requested URL (non-crawl)
+                    if not crawl and count == 1:
+                            raise click.Abort()
+    except Exception as e:
+        click.echo(f"Fatal error: {e}", err=True)
+        raise click.Abort()
 
 @cli.command()
 def hello():

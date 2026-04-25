@@ -28,24 +28,24 @@ def api_scrape():
     max_pages = int(data.get('max_pages', 10))
     only_subpaths = data.get('only_subpaths', False)
 
-    scraper = Scraper()
     results = []
     
     try:
-        if crawl:
-             iterator = Crawler([url], max_depth=depth, max_pages=max_pages, only_subpaths=only_subpaths)
-        else:
-             iterator = zip([url], [0])
-             
-        for current_url, current_depth in iterator:
-            res = scraper.scrape(current_url, dynamic=dynamic, svg_action=svg_action, image_action=image_action, strip=strip_tags)
-            results.append(res)
-            
-            if crawl and isinstance(iterator, Crawler):
-                # Try to get all internal links first
-                links = res.get('internal_links') or []
+        with Scraper() as scraper:
+            if crawl:
+                iterator = Crawler([url], max_depth=depth, max_pages=max_pages, only_subpaths=only_subpaths)
+            else:
+                iterator = zip([url], [0])
                 
-                iterator.add_links(links, current_depth)
+            for current_url, current_depth in iterator:
+                res = scraper.scrape(current_url, dynamic=dynamic, svg_action=svg_action, image_action=image_action, strip=strip_tags)
+                results.append(res)
+
+                if crawl and isinstance(iterator, Crawler):
+                    # Try to get all internal links first
+                    links = res.get('internal_links') or []
+
+                    iterator.add_links(links, current_depth)
         
         # If single URL request without crawl, return dict as before for backward compat?
         # But if crawl is ON, we must return list.
@@ -133,31 +133,33 @@ def index():
         if not target_urls:
             error = "No URLs provided."
         else:
-            scraper = Scraper()
-            
-            # If crawling, we use the Crawler for the entire set or per URL?
-            # CLI does per URL. Let's do that.
-            
-            for url in target_urls:
-                try:
-                    if crawl:
-                        iterator = Crawler([url], max_depth=depth, max_pages=max_pages, only_subpaths=only_subpaths)
-                    else:
-                        iterator = zip([url], [0])
-                        
-                    for current_url, current_depth in iterator:
-                        res = scraper.scrape(current_url, dynamic=dynamic, svg_action=svg_action, image_action=image_action, strip=strip_tags)
-                        results.append(res)
-                        
-                        if crawl and isinstance(iterator, Crawler):
-                             # Try to get all internal links first
-                            links = res.get('internal_links') or []
-                            
-                            iterator.add_links(links, current_depth)
+            try:
+                with Scraper() as scraper:
+                    # If crawling, we use the Crawler for the entire set or per URL?
+                    # CLI does per URL. Let's do that.
 
-                except Exception as e:
-                    error = f"Error scraping {url}: {e}"
-                    # We continue with other URLs if one fails
+                    for url in target_urls:
+                        try:
+                            if crawl:
+                                iterator = Crawler([url], max_depth=depth, max_pages=max_pages, only_subpaths=only_subpaths)
+                            else:
+                                iterator = zip([url], [0])
+
+                            for current_url, current_depth in iterator:
+                                res = scraper.scrape(current_url, dynamic=dynamic, svg_action=svg_action, image_action=image_action, strip=strip_tags)
+                                results.append(res)
+
+                                if crawl and isinstance(iterator, Crawler):
+                                    # Try to get all internal links first
+                                    links = res.get('internal_links') or []
+
+                                    iterator.add_links(links, current_depth)
+
+                        except Exception as e:
+                            error = f"Error scraping {url}: {e}"
+                            # We continue with other URLs if one fails
+            except Exception as e:
+                error = f"Scraper initialization error: {e}"
             
     return render_template('index.html', 
                            urls_input=urls_input, 
