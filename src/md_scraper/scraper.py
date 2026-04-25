@@ -24,6 +24,9 @@ class Scraper:
     using heuristics, and converting the resulting DOM to GitHub Flavored Markdown.
     """
 
+    # Heuristic for finding navigation/sidebar-like elements
+    _NAV_HEURISTIC_RE = re.compile(r'sidebar|menu|nav|toc', re.I)
+
     def __init__(self):
         self._playwright = None
         self._browser = None
@@ -444,7 +447,7 @@ class Scraper:
         
         # Heuristic: look for nav, aside, or divs with sidebar-like classes
         nav_elements = soup.find_all(['nav', 'aside'])
-        nav_elements.extend(soup.find_all('div', class_=re.compile(r'sidebar|menu|nav|toc', re.I)))
+        nav_elements.extend(soup.find_all('div', class_=self._NAV_HEURISTIC_RE))
         
         # Search scope: found elements, or fallback to body if none found
         search_scope = nav_elements if nav_elements else [soup.body] if soup.body else [soup]
