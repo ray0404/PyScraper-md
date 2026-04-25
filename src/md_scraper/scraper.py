@@ -4,6 +4,7 @@ import os
 import base64
 import email
 import re
+import concurrent.futures
 from typing import Union
 from email import policy
 from urllib.parse import urljoin, urlparse
@@ -374,36 +375,55 @@ class Scraper:
         # 2. Handle standard Images
         if image_action != 'remote':
             from urllib.parse import urljoin
+
+            # Pre-filter image candidate tags
+            candidates = []
+            img_map = {}
             for i, img in enumerate(soup.find_all('img')):
                 src = img.get('src')
                 if not src or src.startswith('data:'):
                     continue
                 
-                # Resolve relative URLs
                 if base_url:
                     src = urljoin(base_url, src)
+
+                candidates.append((i, img, src))
+
+            # Hoist os.makedirs for 'file' action
+            if image_action == 'file' and assets_dir and candidates:
+                os.makedirs(assets_dir, exist_ok=True)
                 
+            def process_image(item):
+                i, img, src = item
                 try:
-                    if image_action == 'base64':
-                        resp = requests.get(src, timeout=10)
-                        if resp.status_code == 200:
+                    resp = requests.get(src, timeout=10)
+                    if resp.status_code == 200:
+                        if image_action == 'base64':
                             content_type = resp.headers.get('Content-Type', 'image/png')
                             encoded = base64.b64encode(resp.content).decode('utf-8')
-                            img['src'] = f"data:{content_type};base64,{encoded}"
-                    
-                    elif image_action == 'file' and assets_dir:
-                        os.makedirs(assets_dir, exist_ok=True)
-                        resp = requests.get(src, timeout=10)
-                        if resp.status_code == 200:
+                            return (i, f"data:{content_type};base64,{encoded}")
+                        elif image_action == 'file' and assets_dir:
                             ext = src.split('.')[-1].split('?')[0] or 'png'
                             filename = f"image_{i}.{ext}"
                             filepath = os.path.join(assets_dir, filename)
                             with open(filepath, 'wb') as f:
                                 f.write(resp.content)
-                            img['src'] = os.path.join(os.path.basename(assets_dir), filename)
+                            return (i, os.path.join(os.path.basename(assets_dir), filename))
                 except Exception as e:
                     # Fallback to remote URL on failure
-                    continue
+                    pass
+                return (i, None)
+
+            if candidates:
+                for item in candidates:
+                    img_map[item[0]] = item[1]
+
+                with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+                    results = executor.map(process_image, candidates)
+
+                for idx, new_src in results:
+                    if new_src:
+                        img_map[idx]['src'] = new_src
 
         # Default options for GFM-like output
         defaults = {
