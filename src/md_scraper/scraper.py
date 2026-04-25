@@ -8,7 +8,7 @@ import concurrent.futures
 from typing import Union
 from email import policy
 from urllib.parse import urljoin, urlparse
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, Tag, PageElement
 from markdownify import markdownify as md
 from md_scraper.sanitizer import MarkdownSanitizer
 
@@ -200,7 +200,7 @@ class Scraper:
         finally:
             page.close()
 
-    def extract_main_content(self, html: Union[str, BeautifulSoup]) -> str:
+    def extract_main_content(self, html: Union[str, BeautifulSoup], as_soup: bool = False) -> Union[str, BeautifulSoup, Tag, PageElement]:
         """
         Extracts the primary content area from an HTML string, removing boilerplate.
         
@@ -209,9 +209,10 @@ class Scraper:
         
         Args:
             html (Union[str, BeautifulSoup]): The raw HTML content or BeautifulSoup object.
+            as_soup (bool): If True, returns the soup object or Tag instead of a string.
             
         Returns:
-            str: The HTML string containing only the main content area.
+            Union[str, BeautifulSoup, Tag, PageElement]: The main content as a string or soup/tag object.
         """
         if isinstance(html, str):
             soup = BeautifulSoup(html, 'lxml')
@@ -229,11 +230,8 @@ class Scraper:
         if not main_content:
             main_content = soup.find('div', class_=['content', 'main', 'post-content'])
             
-        if main_content:
-            return str(main_content)
-        
-        # Fallback to body if nothing found
-        return str(soup.body) if soup.body else str(soup)
+        result = main_content or soup.body or soup
+        return result if as_soup else str(result)
 
     def extract_metadata(self, html: Union[str, BeautifulSoup]) -> dict:
         """
@@ -302,12 +300,12 @@ class Scraper:
 
         return metadata
 
-    def to_markdown(self, html: str, **options) -> str:
+    def to_markdown(self, html: Union[str, BeautifulSoup, Tag, PageElement], **options) -> str:
         """
-        Converts an HTML string to GitHub Flavored Markdown.
+        Converts HTML content to GitHub Flavored Markdown.
         
         Args:
-            html (str): The HTML content to convert.
+            html (Union[str, BeautifulSoup, Tag, PageElement]): The HTML content to convert.
             **options: Additional options passed to the markdownify library.
                 svg_action (str): Action for inline <svg> tags. 
                     'image' (default): Convert to base64 image.
@@ -329,7 +327,10 @@ class Scraper:
         assets_dir = options.pop('assets_dir', None)
         base_url = options.pop('base_url', None)
         
-        soup = BeautifulSoup(html, 'lxml')
+        if isinstance(html, (BeautifulSoup, Tag, PageElement)):
+            soup = html
+        else:
+            soup = BeautifulSoup(html, 'lxml')
 
         # 1. Handle SVGs
         placeholders = {}
@@ -374,7 +375,8 @@ class Scraper:
         elif svg_action == 'preserve':
             for i, svg in enumerate(soup.find_all('svg')):
                 placeholder = f"MDScraperSVG{i}"
-                placeholders[placeholder] = str(svg)
+                # Optimization: store the Tag object, avoiding immediate stringification
+                placeholders[placeholder] = svg
                 svg.replace_with(placeholder)
 
         # 2. Handle standard Images
@@ -440,12 +442,14 @@ class Scraper:
         
         # Merge with user options
         config = {**defaults, **options}
+        # markdownify works best with strings to avoid redundant or broken re-parsing
         markdown = md(str(soup), **config)
 
         # Restore preserved SVGs
-        if svg_action == 'preserve':
-            for placeholder, svg_content in placeholders.items():
-                markdown = markdown.replace(placeholder, svg_content)
+        if svg_action == 'preserve' and placeholders:
+            # Single-pass restoration using re.sub with callback for efficiency
+            pattern = re.compile("|".join(re.escape(k) for k in placeholders.keys()))
+            markdown = pattern.sub(lambda m: str(placeholders[m.group(0)]), markdown)
 
         # Apply post-processing sanitization
         if options.get('sanitize', True):
@@ -586,10 +590,11 @@ class Scraper:
         internal_links = self.extract_links(soup, url)
         
         # Destructive operation last (modifies soup)
-        main_html = self.extract_main_content(soup)
+        # Pass as_soup=True to avoid stringification and re-parsing in to_markdown
+        main_soup = self.extract_main_content(soup, as_soup=True)
 
         # Convert to markdown
-        markdown = self.to_markdown(main_html, **options)
+        markdown = self.to_markdown(main_soup, **options)
         
         return {
             'url': url,
