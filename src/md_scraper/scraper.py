@@ -334,6 +334,7 @@ class Scraper:
 
         # 1. Handle SVGs
         placeholders = {}
+        preserved_svg_nodes = []
         if svg_action == 'strip':
             for svg in soup.find_all('svg'):
                 svg.decompose()
@@ -377,9 +378,13 @@ class Scraper:
                 placeholder = f"MDScraperSVG{i}"
                 # Optimization: store the Tag object, avoiding immediate stringification
                 placeholders[placeholder] = svg
-                svg.replace_with(placeholder)
+                from bs4 import NavigableString
+                p_node = NavigableString(placeholder)
+                svg.replace_with(p_node)
+                preserved_svg_nodes.append((p_node, svg))
 
         # 2. Handle standard Images
+        original_srcs = {}
         if image_action != 'remote':
             from urllib.parse import urljoin
 
@@ -395,6 +400,8 @@ class Scraper:
                 if base_url:
                     src = urljoin(base_url, src)
                 
+                # Keep track of original src to restore later if modifying soup in-place
+                original_srcs[img] = img.get('src')
                 candidates.append((i, img, src))
 
             # Hoist os.makedirs for 'file' action
@@ -450,6 +457,14 @@ class Scraper:
             # Single-pass restoration using re.sub with callback for efficiency
             pattern = re.compile("|".join(re.escape(k) for k in placeholders.keys()))
             markdown = pattern.sub(lambda m: str(placeholders[m.group(0)]), markdown)
+
+            # Restore soup nodes for preservation
+            for p_node, original_svg in preserved_svg_nodes:
+                p_node.replace_with(original_svg)
+
+        # Restore original image srcs in the soup
+        for img, src in original_srcs.items():
+            img['src'] = src
 
         # Apply post-processing sanitization
         if options.get('sanitize', True):
