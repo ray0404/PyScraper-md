@@ -10,6 +10,7 @@ from email import policy
 from urllib.parse import urljoin, urlparse
 from bs4 import BeautifulSoup
 from markdownify import markdownify as md
+from md_scraper.sanitizer import MarkdownSanitizer
 
 NAV_SIDEBAR_RE = re.compile(r'sidebar|menu|nav|toc', re.I)
 
@@ -30,6 +31,7 @@ class Scraper:
     def __init__(self):
         self._playwright = None
         self._browser = None
+        self.sanitizer = MarkdownSanitizer()
 
     def __enter__(self):
         return self
@@ -442,6 +444,10 @@ class Scraper:
         if svg_action == 'preserve':
             for placeholder, svg_content in placeholders.items():
                 markdown = markdown.replace(placeholder, svg_content)
+
+        # Apply post-processing sanitization
+        if options.get('sanitize', True):
+            markdown = self.sanitizer.sanitize(markdown)
 
         return markdown
 
