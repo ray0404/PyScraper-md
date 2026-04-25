@@ -4,6 +4,7 @@ import os
 import base64
 import email
 import re
+import concurrent.futures
 from typing import Union
 from email import policy
 from urllib.parse import urljoin, urlparse
@@ -373,7 +374,8 @@ class Scraper:
 
         # 2. Handle standard Images
         if image_action != 'remote':
-            from urllib.parse import urljoin
+            # Pre-filter tags that need processing
+            tasks = []
             for i, img in enumerate(soup.find_all('img')):
                 src = img.get('src')
                 if not src or src.startswith('data:'):
@@ -383,27 +385,44 @@ class Scraper:
                 if base_url:
                     src = urljoin(base_url, src)
                 
-                try:
-                    if image_action == 'base64':
-                        resp = requests.get(src, timeout=10)
+                # Only add task if it's base64 or file with assets_dir
+                if image_action == 'base64' or (image_action == 'file' and assets_dir):
+                    tasks.append({'index': i, 'tag': img, 'url': src})
+
+            if tasks:
+                if image_action == 'file' and assets_dir:
+                    os.makedirs(assets_dir, exist_ok=True)
+
+                def process_image(task):
+                    try:
+                        resp = requests.get(task['url'], timeout=10)
                         if resp.status_code == 200:
-                            content_type = resp.headers.get('Content-Type', 'image/png')
-                            encoded = base64.b64encode(resp.content).decode('utf-8')
-                            img['src'] = f"data:{content_type};base64,{encoded}"
+                            if image_action == 'base64':
+                                content_type = resp.headers.get('Content-Type', 'image/png')
+                                encoded = base64.b64encode(resp.content).decode('utf-8')
+                                return task['index'], f"data:{content_type};base64,{encoded}"
+
+                            elif image_action == 'file' and assets_dir:
+                                ext = task['url'].split('.')[-1].split('?')[0] or 'png'
+                                filename = f"image_{task['index']}.{ext}"
+                                filepath = os.path.join(assets_dir, filename)
+                                with open(filepath, 'wb') as f:
+                                    f.write(resp.content)
+                                return task['index'], os.path.join(os.path.basename(assets_dir), filename)
+                    except Exception:
+                        pass
+                    return task['index'], None
+
+                with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+                    future_to_index = {executor.submit(process_image, t): t['index'] for t in tasks}
                     
-                    elif image_action == 'file' and assets_dir:
-                        os.makedirs(assets_dir, exist_ok=True)
-                        resp = requests.get(src, timeout=10)
-                        if resp.status_code == 200:
-                            ext = src.split('.')[-1].split('?')[0] or 'png'
-                            filename = f"image_{i}.{ext}"
-                            filepath = os.path.join(assets_dir, filename)
-                            with open(filepath, 'wb') as f:
-                                f.write(resp.content)
-                            img['src'] = os.path.join(os.path.basename(assets_dir), filename)
-                except Exception as e:
-                    # Fallback to remote URL on failure
-                    continue
+                    # Create a map for $O(1)$ lookup during update
+                    index_to_tag = {t['index']: t['tag'] for t in tasks}
+
+                    for future in concurrent.futures.as_completed(future_to_index):
+                        idx, new_src = future.result()
+                        if new_src:
+                            index_to_tag[idx]['src'] = new_src
 
         # Default options for GFM-like output
         defaults = {
