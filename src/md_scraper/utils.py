@@ -2,10 +2,12 @@ import re
 import time
 from urllib.parse import urlparse
 
+_FILENAME_SANITIZE_RE = re.compile(r'(?u)[^-\w.]')
+
 def sanitize_filename(name):
     """Sanitize a string to be safe for filenames."""
     s = str(name).strip().replace(' ', '_')
-    s = re.sub(r'(?u)[^-\w.]', '', s)
+    s = _FILENAME_SANITIZE_RE.sub('', s)
     return s[:50]
 
 def get_title_from_result(result, url):
