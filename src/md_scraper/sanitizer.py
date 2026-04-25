@@ -10,13 +10,10 @@ class MarkdownSanitizer:
         # Patterns for cleaning
         self.patterns = [
             # 1. Remove excessive newlines (more than 2)
-            (r'
-{3,}', '
-
-'),
+            (r'\n{3,}', '\n\n'),
             
             # 2. Strip trailing whitespace from lines
-            (r'[ 	]+$', ''),
+            (r'[ \t]+$', ''),
             
             # 3. Fix headers that don't have a space after #
             (r'^(#+)([^#\s])', r'\1 \2'),
@@ -52,8 +49,7 @@ class MarkdownSanitizer:
         Attempts to fix common issues in Markdown tables, 
         like missing alignment separators or inconsistent columns.
         """
-        lines = markdown.split('
-')
+        lines = markdown.split('\n')
         fixed_lines = []
         
         in_table = False
@@ -74,8 +70,7 @@ class MarkdownSanitizer:
             
             fixed_lines.append(line)
             
-        return '
-'.join(fixed_lines)
+        return '\n'.join(fixed_lines)
 
     @staticmethod
     def strip_non_ascii(text: str) -> str:
