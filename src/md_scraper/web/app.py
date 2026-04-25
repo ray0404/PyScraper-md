@@ -70,6 +70,7 @@ def download_zip():
         return jsonify({'error': 'No results provided'}), 400
 
     memory_file = io.BytesIO()
+    used_filenames = set()
     with zipfile.ZipFile(memory_file, 'w', zipfile.ZIP_DEFLATED) as zf:
         for i, res in enumerate(results):
             url = res.get('url', 'unknown')
@@ -77,9 +78,10 @@ def download_zip():
             title = get_title_from_result(res, url)
             filename = f"{title}.md"
             # Ensure unique filenames in ZIP
-            if filename in zf.namelist():
+            if filename in used_filenames:
                 filename = f"{title}_{i}.md"
             zf.writestr(filename, markdown)
+            used_filenames.add(filename)
     
     memory_file.seek(0)
     return send_file(
