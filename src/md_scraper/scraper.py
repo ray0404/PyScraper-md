@@ -7,7 +7,7 @@ import re
 from typing import Union
 from email import policy
 from urllib.parse import urljoin, urlparse
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, Tag
 from markdownify import markdownify as md
 
 # Try to import playwright, but don't crash if missing
@@ -195,20 +195,23 @@ class Scraper:
         finally:
             page.close()
 
-    def extract_main_content(self, html: Union[str, BeautifulSoup]) -> str:
+    def extract_main_content(self, html: Union[str, BeautifulSoup, Tag]) -> Union[str, BeautifulSoup, Tag]:
         """
         Extracts the primary content area from an HTML string, removing boilerplate.
         
         It attempts to find tags like <main>, <article>, or common content class names.
         Non-content elements such as <nav>, <footer>, <script>, and <style> are removed.
         
+        NOTE: If a BeautifulSoup or Tag object is passed, it will be modified in-place.
+
         Args:
-            html (Union[str, BeautifulSoup]): The raw HTML content or BeautifulSoup object.
+            html (Union[str, BeautifulSoup, Tag]): The raw HTML content or BeautifulSoup object.
             
         Returns:
-            str: The HTML string containing only the main content area.
+            Union[str, BeautifulSoup, Tag]: The content area as a string or BS4 object.
         """
-        if isinstance(html, str):
+        is_str = isinstance(html, str)
+        if is_str:
             soup = BeautifulSoup(html, 'lxml')
         else:
             soup = html
@@ -224,11 +227,8 @@ class Scraper:
         if not main_content:
             main_content = soup.find('div', class_=['content', 'main', 'post-content'])
             
-        if main_content:
-            return str(main_content)
-        
-        # Fallback to body if nothing found
-        return str(soup.body) if soup.body else str(soup)
+        result = main_content or soup.body or soup
+        return str(result) if is_str else result
 
     def extract_metadata(self, html: Union[str, BeautifulSoup]) -> dict:
         """
@@ -297,12 +297,15 @@ class Scraper:
 
         return metadata
 
-    def to_markdown(self, html: str, **options) -> str:
+    def to_markdown(self, html: Union[str, BeautifulSoup, Tag], **options) -> str:
         """
-        Converts an HTML string to GitHub Flavored Markdown.
+        Converts an HTML string or BeautifulSoup object to GitHub Flavored Markdown.
+
+        NOTE: If a BeautifulSoup or Tag object is passed, it will be modified during
+        processing, though an effort is made to restore it for 'preserve' actions.
         
         Args:
-            html (str): The HTML content to convert.
+            html (Union[str, BeautifulSoup, Tag]): The HTML content to convert.
             **options: Additional options passed to the markdownify library.
                 svg_action (str): Action for inline <svg> tags. 
                     'image' (default): Convert to base64 image.
@@ -324,10 +327,27 @@ class Scraper:
         assets_dir = options.pop('assets_dir', None)
         base_url = options.pop('base_url', None)
         
-        soup = BeautifulSoup(html, 'lxml')
+        if isinstance(html, (BeautifulSoup, Tag)):
+            soup = html
+        else:
+            soup = BeautifulSoup(html, 'lxml')
+
+        # Factory for creating new tags
+        if isinstance(soup, BeautifulSoup):
+            factory = soup
+        else:
+            # Find the root BeautifulSoup object
+            root = soup
+            while root.parent:
+                root = root.parent
+            if isinstance(root, BeautifulSoup):
+                factory = root
+            else:
+                factory = BeautifulSoup("", "lxml")
 
         # 1. Handle SVGs
         placeholders = {}
+        preserved_svg_nodes = []
         if svg_action == 'strip':
             for svg in soup.find_all('svg'):
                 svg.decompose()
@@ -358,20 +378,24 @@ class Scraper:
                     with open(filepath, 'w') as f:
                         f.write(svg_str)
                     # Use relative path for Markdown
-                    img_tag = soup.new_tag('img', src=os.path.join(os.path.basename(assets_dir), filename), alt="svg icon")
+                    img_tag = factory.new_tag('img', src=os.path.join(os.path.basename(assets_dir), filename), alt="svg icon")
                 else:
                     # Default: base64 image
                     encoded = base64.b64encode(svg_str.encode('utf-8')).decode('utf-8')
-                    img_tag = soup.new_tag('img', src=f"data:image/svg+xml;base64,{encoded}", alt="svg image")
+                    img_tag = factory.new_tag('img', src=f"data:image/svg+xml;base64,{encoded}", alt="svg image")
                 
                 svg.replace_with(img_tag)
         elif svg_action == 'preserve':
             for i, svg in enumerate(soup.find_all('svg')):
                 placeholder = f"MDScraperSVG{i}"
                 placeholders[placeholder] = str(svg)
-                svg.replace_with(placeholder)
+                from bs4 import NavigableString
+                p_node = NavigableString(placeholder)
+                svg.replace_with(p_node)
+                preserved_svg_nodes.append((p_node, svg))
 
         # 2. Handle standard Images
+        original_srcs = {}
         if image_action != 'remote':
             from urllib.parse import urljoin
             for i, img in enumerate(soup.find_all('img')):
@@ -383,6 +407,9 @@ class Scraper:
                 if base_url:
                     src = urljoin(base_url, src)
                 
+                # Keep track of original src to restore later
+                original_srcs[img] = img.get('src')
+
                 try:
                     if image_action == 'base64':
                         resp = requests.get(src, timeout=10)
@@ -414,12 +441,19 @@ class Scraper:
         
         # Merge with user options
         config = {**defaults, **options}
-        markdown = md(str(soup), **config)
+        markdown = md(soup, **config)
 
-        # Restore preserved SVGs
+        # Restore preserved SVGs in both the markdown string and the soup (to avoid corruption)
         if svg_action == 'preserve':
             for placeholder, svg_content in placeholders.items():
                 markdown = markdown.replace(placeholder, svg_content)
+
+            for p_node, original_svg in preserved_svg_nodes:
+                p_node.replace_with(original_svg)
+
+        # Restore original image srcs in the soup
+        for img, src in original_srcs.items():
+            img['src'] = src
 
         return markdown
 
@@ -556,10 +590,10 @@ class Scraper:
         internal_links = self.extract_links(soup, url)
         
         # Destructive operation last (modifies soup)
-        main_html = self.extract_main_content(soup)
+        main_content = self.extract_main_content(soup)
 
         # Convert to markdown
-        markdown = self.to_markdown(main_html, **options)
+        markdown = self.to_markdown(main_content, **options)
         
         return {
             'url': url,
