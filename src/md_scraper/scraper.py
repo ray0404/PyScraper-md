@@ -11,6 +11,8 @@ from urllib.parse import urljoin, urlparse
 from bs4 import BeautifulSoup
 from markdownify import markdownify as md
 
+NAV_SIDEBAR_RE = re.compile(r'sidebar|menu|nav|toc', re.I)
+
 # Try to import playwright, but don't crash if missing
 try:
     from playwright.sync_api import sync_playwright
@@ -464,7 +466,7 @@ class Scraper:
         
         # Heuristic: look for nav, aside, or divs with sidebar-like classes
         nav_elements = soup.find_all(['nav', 'aside'])
-        nav_elements.extend(soup.find_all('div', class_=re.compile(r'sidebar|menu|nav|toc', re.I)))
+        nav_elements.extend(soup.find_all('div', class_=NAV_SIDEBAR_RE))
         
         # Search scope: found elements, or fallback to body if none found
         search_scope = nav_elements if nav_elements else [soup.body] if soup.body else [soup]
