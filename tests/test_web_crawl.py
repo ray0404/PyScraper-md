@@ -35,6 +35,10 @@ def test_api_crawl_parameters(client, monkeypatch):
 
     # Mock Scraper to avoid actual network calls
     class MockScraper:
+        def __enter__(self):
+            return self
+        def __exit__(self, *args):
+            pass
         def scrape(self, url, **kwargs):
             return {
                 'url': url,

@@ -39,10 +39,9 @@ def test_scrape_with_strip(client):
         
         # Test with multiple strip tags
         response = client.post('/', data={
-            'urls': 'https://example.com', 
-            'strip_tags': ['script', 'iframe']
-        })
-        
+            'urls': 'https://example.com',
+            'strip': ['script', 'iframe']
+        })        
         assert response.status_code == 200
         mock_scrape.assert_called_once_with(
             'https://example.com', 

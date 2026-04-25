@@ -34,12 +34,11 @@ def test_download_zip(client):
         {'url': 'https://example.com/2', 'markdown': 'Content 2', 'metadata': {'title': 'Page 2'}}
     ]
     
-    response = client.post('/api/download_zip', 
+    response = client.post('/api/download-zip',
                            data=json.dumps({'results': results}),
-                           content_type='application/json')
-    
+                           content_type='application/json')    
     assert response.status_code == 200
-    assert response.headers['Content-Disposition'] == 'attachment; filename=scraped_pages.zip'
+    assert response.headers['Content-Disposition'] == 'attachment; filename=scraped_content.zip'
     
     # Verify ZIP content
     zip_buffer = io.BytesIO(response.data)
