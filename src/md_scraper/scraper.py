@@ -332,6 +332,8 @@ class Scraper:
             for svg in soup.find_all('svg'):
                 svg.decompose()
         elif svg_action in ['image', 'file']:
+            if svg_action == 'file' and assets_dir:
+                os.makedirs(assets_dir, exist_ok=True)
             for i, svg in enumerate(soup.find_all('svg')):
                 # Fallback fixes for visibility
                 if svg.get('fill') == 'currentColor' or not svg.has_attr('fill'):
@@ -352,7 +354,6 @@ class Scraper:
                 svg_str = str(svg)
                 
                 if svg_action == 'file' and assets_dir:
-                    os.makedirs(assets_dir, exist_ok=True)
                     filename = f"svg_icon_{i}.svg"
                     filepath = os.path.join(assets_dir, filename)
                     with open(filepath, 'w') as f:
@@ -374,6 +375,8 @@ class Scraper:
         # 2. Handle standard Images
         if image_action != 'remote':
             from urllib.parse import urljoin
+            if image_action == 'file' and assets_dir:
+                os.makedirs(assets_dir, exist_ok=True)
             for i, img in enumerate(soup.find_all('img')):
                 src = img.get('src')
                 if not src or src.startswith('data:'):
@@ -392,7 +395,6 @@ class Scraper:
                             img['src'] = f"data:{content_type};base64,{encoded}"
                     
                     elif image_action == 'file' and assets_dir:
-                        os.makedirs(assets_dir, exist_ok=True)
                         resp = requests.get(src, timeout=10)
                         if resp.status_code == 200:
                             ext = src.split('.')[-1].split('?')[0] or 'png'
