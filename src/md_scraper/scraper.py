@@ -337,6 +337,8 @@ class Scraper:
             for svg in soup.find_all('svg'):
                 svg.decompose()
         elif svg_action in ['image', 'file']:
+            if svg_action == 'file' and assets_dir:
+                os.makedirs(assets_dir, exist_ok=True)
             for i, svg in enumerate(soup.find_all('svg')):
                 # Fallback fixes for visibility
                 if svg.get('fill') == 'currentColor' or not svg.has_attr('fill'):
@@ -357,7 +359,6 @@ class Scraper:
                 svg_str = str(svg)
                 
                 if svg_action == 'file' and assets_dir:
-                    os.makedirs(assets_dir, exist_ok=True)
                     filename = f"svg_icon_{i}.svg"
                     filepath = os.path.join(assets_dir, filename)
                     with open(filepath, 'w') as f:
@@ -388,9 +389,10 @@ class Scraper:
                 if not src or src.startswith('data:'):
                     continue
                 
+                # Resolve relative URLs
                 if base_url:
                     src = urljoin(base_url, src)
-
+                
                 candidates.append((i, img, src))
 
             # Hoist os.makedirs for 'file' action
