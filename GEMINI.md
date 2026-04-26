@@ -25,7 +25,7 @@ The project follows a modular structure managed by **Poetry**.
 ## Setup & Development
 
 ### Prerequisites
-*   Python 3.12+
+*   Python 3.13+
 *   **Poetry** (Package Manager)
 
 ### Installation

@@ -1,6 +1,6 @@
 # Markdown Scraper 🚀
 
-[![Python Version](https://img.shields.io/badge/python-3.12%2B-blue.svg)](https://www.python.org/)
+[![Python Version](https://img.shields.io/badge/python-3.13%2B-blue.svg)](https://www.python.org/)
 [![Poetry](https://img.shields.io/badge/package%20manager-poetry-blueviolet.svg)](https://python-poetry.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Docker](https://img.shields.io/badge/docker-ready-blue.svg)](https://www.docker.com/)
@@ -29,7 +29,7 @@ Built for archival, LLM context gathering, research, and technical documentation
 
 ## 🛠️ Tech Stack
 
--   **Core:** Python 3.12+
+-   **Core:** Python 3.13+
 -   **Parsing:** `BeautifulSoup4`, `lxml`
 -   **Conversion:** `markdownify`
 -   **Browser Automation:** `Playwright`
@@ -41,7 +41,7 @@ Built for archival, LLM context gathering, research, and technical documentation
 
 ### Prerequisites
 
--   **Python 3.12+**
+-   **Python 3.13+**
 -   **Poetry** (Recommended) or `pip`
 -   **Playwright Browsers** (for dynamic scraping)
 

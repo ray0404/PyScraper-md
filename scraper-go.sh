@@ -2,19 +2,39 @@
 
 # Configuration
 SERVER_URL="https://scraper-751660269987.us-central1.run.app"
-SCRAPER_CMD="poetry run scraper scrape"
+
+# Find the best way to run the scraper
+if command -v poetry >/dev/null 2>&1 && [ -f "pyproject.toml" ]; then
+    SCRAPER_CMD="poetry run scraper scrape"
+elif command -v scraper >/dev/null 2>&1; then
+    SCRAPER_CMD="scraper scrape"
+elif command -v python3 >/dev/null 2>&1; then
+    SCRAPER_CMD="python3 -m md_scraper.cli scrape"
+else
+    SCRAPER_CMD="python -m md_scraper.cli scrape"
+fi
 
 # Colors
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
 YELLOW='\033[1;33m'
+RED='\033[0;31m'
 NC='\033[0m' # No Color
 
 # 1. Header
 echo -e "${BLUE}=================================================${NC}"
 echo -e "${BLUE}       MD Scraper Interactive CLI (Remote)       ${NC}"
 echo -e "${BLUE}=================================================${NC}"
-echo -e "Using Server: ${YELLOW}$SERVER_URL${NC}\n"
+echo -e "Using Server: ${YELLOW}$SERVER_URL${NC}"
+echo -e "Scraper Command: ${YELLOW}$SCRAPER_CMD${NC}\n"
+
+# Check if on Android/Termux
+if [ -d "/data/data/com.termux" ]; then
+    echo -e "${YELLOW}Note:${NC} Termux detected. Dynamic scraping is optimized via remote server."
+    if [ -z "$CHROMIUM_PATH" ] && [ -f "/usr/bin/chromium-browser" ]; then
+        export CHROMIUM_PATH="/usr/bin/chromium-browser"
+    fi
+fi
 
 # 2. Input
 echo -e "Enter ${GREEN}URL(s)${NC} (space separated) or a ${GREEN}file path${NC} (.txt with URLs):"
