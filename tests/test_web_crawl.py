@@ -25,8 +25,16 @@ def test_api_crawl_parameters(client, monkeypatch):
             self.queue = [] 
 
         def __iter__(self):
-            # Return a single item to simulate one page scrape
-            yield self.start_urls[0], 0
+            return self
+
+        def __next__(self):
+            if not getattr(self, 'yielded', False):
+                self.yielded = True
+                return self.start_urls[0], 0
+            raise StopIteration
+
+        def has_next(self):
+            return not getattr(self, 'yielded', False)
 
         def add_links(self, links, current_depth):
             pass
