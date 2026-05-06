@@ -19,6 +19,7 @@ class Crawler:
         # Determine allowed domains from start_urls
         self.allowed_domains = {urlparse(url).netloc for url in start_urls}
         self.start_urls = start_urls
+        self.start_urls_tuple = tuple(start_urls)
 
     def __iter__(self):
         return self
@@ -55,7 +56,7 @@ class Crawler:
             # Subpath Check
             if self.only_subpaths:
                 # Must start with at least one of the start_urls
-                if not any(link.startswith(s_url) for s_url in self.start_urls):
+                if not link.startswith(self.start_urls_tuple):
                     continue
             
             self.visited.add(link)
