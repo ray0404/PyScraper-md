@@ -335,13 +335,14 @@ class Scraper:
         # 1. Handle SVGs
         placeholders = {}
         preserved_svg_nodes = []
+        svgs = soup.find_all('svg')
         if svg_action == 'strip':
-            for svg in soup.find_all('svg'):
+            for svg in svgs:
                 svg.decompose()
         elif svg_action in ['image', 'file']:
             if svg_action == 'file' and assets_dir:
                 os.makedirs(assets_dir, exist_ok=True)
-            for i, svg in enumerate(soup.find_all('svg')):
+            for i, svg in enumerate(svgs):
                 # Fallback fixes for visibility
                 if svg.get('fill') == 'currentColor' or not svg.has_attr('fill'):
                     svg['fill'] = '#000000'
@@ -374,7 +375,7 @@ class Scraper:
                 
                 svg.replace_with(img_tag)
         elif svg_action == 'preserve':
-            for i, svg in enumerate(soup.find_all('svg')):
+            for i, svg in enumerate(svgs):
                 placeholder = f"MDScraperSVG{i}"
                 # Optimization: store the Tag object, avoiding immediate stringification
                 placeholders[placeholder] = svg
