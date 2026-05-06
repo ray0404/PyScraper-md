@@ -8,7 +8,7 @@ class MarkdownSanitizer:
 
     def __init__(self):
         # Patterns for cleaning
-        self.patterns = [
+        raw_patterns = [
             # 1. Remove excessive newlines (more than 2)
             (r'\n{3,}', '\n\n'),
             
@@ -29,6 +29,11 @@ class MarkdownSanitizer:
             # (Optional: might be too opinionated, but GFM prefers - or *)
         ]
 
+        self.patterns = []
+        for pattern, replacement in raw_patterns:
+            flags = re.MULTILINE | re.DOTALL if '<!--' in pattern else re.MULTILINE
+            self.patterns.append((re.compile(pattern, flags=flags), replacement))
+
     def sanitize(self, markdown: str) -> str:
         """
         Applies a series of transformations to clean the Markdown.
@@ -37,7 +42,7 @@ class MarkdownSanitizer:
         
         # Apply regex patterns
         for pattern, replacement in self.patterns:
-            cleaned = re.sub(pattern, replacement, cleaned, flags=re.MULTILINE | re.DOTALL if '<!--' in pattern else re.MULTILINE)
+            cleaned = pattern.sub(replacement, cleaned)
 
         # 7. Specific Table Fixes
         cleaned = self._fix_tables(cleaned)
