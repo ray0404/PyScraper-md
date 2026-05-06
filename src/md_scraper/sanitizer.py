@@ -77,4 +77,4 @@ class MarkdownSanitizer:
         """
         Removes non-printable/junk characters.
         """
-        return "".join(i for i in text if ord(i) < 128)
+        return text.encode('ascii', 'ignore').decode('ascii')
