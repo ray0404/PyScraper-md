@@ -6,32 +6,34 @@ class MarkdownSanitizer:
     Focuses on removing noise and ensuring GFM compliance.
     """
 
-    def __init__(self):
-        # Patterns for cleaning
-        raw_patterns = [
-            # 1. Remove excessive newlines (more than 2)
-            (r'\n{3,}', '\n\n'),
-            
-            # 2. Strip trailing whitespace from lines
-            (r'[ \t]+$', ''),
-            
-            # 3. Fix headers that don't have a space after #
-            (r'^([ \t]{0,3}#+)([^#\s])', r'\1 \2'),
-            
-            # 4. Remove empty links/images (only if they are truly empty)
-            (r'!?\[\s*\]\(\s*\)', ''),
-            
-            # 5. Clean up residue HTML comments if they weren't stripped
-            (r'<!--.*?-->', ''),
-            
-            # 6. Normalize list markers (sometimes mixed * and -)
-            # (Optional: might be too opinionated, but GFM prefers - or *)
-        ]
+    # Pre-compile patterns at class-level to avoid recompilation on every instantiation
+    _RAW_PATTERNS = [
+        # 1. Remove excessive newlines (more than 2)
+        (r'\n{3,}', '\n\n'),
 
-        self.patterns = []
-        for pattern, replacement in raw_patterns:
-            flags = re.MULTILINE | re.DOTALL if '<!--' in pattern else re.MULTILINE
-            self.patterns.append((re.compile(pattern, flags=flags), replacement))
+        # 2. Strip trailing whitespace from lines
+        (r'[ \t]+$', ''),
+
+        # 3. Fix headers that don't have a space after #
+        (r'^([ \t]{0,3}#+)([^#\s])', r'\1 \2'),
+
+        # 4. Remove empty links/images (only if they are truly empty)
+        (r'!?\[\s*\]\(\s*\)', ''),
+
+        # 5. Clean up residue HTML comments if they weren't stripped
+        (r'<!--.*?-->', ''),
+
+        # 6. Normalize list markers (sometimes mixed * and -)
+        # (Optional: might be too opinionated, but GFM prefers - or *)
+    ]
+
+    PATTERNS = []
+    for pattern, replacement in _RAW_PATTERNS:
+        flags = re.MULTILINE | re.DOTALL if '<!--' in pattern else re.MULTILINE
+        PATTERNS.append((re.compile(pattern, flags=flags), replacement))
+
+    def __init__(self):
+        self.patterns = self.PATTERNS
 
     def sanitize(self, markdown: str) -> str:
         """
@@ -39,7 +41,7 @@ class MarkdownSanitizer:
         """
         cleaned = markdown
         
-        # Apply regex patterns
+        # Apply regex patterns using precompiled pattern.sub
         for pattern, replacement in self.patterns:
             cleaned = pattern.sub(replacement, cleaned)
 
