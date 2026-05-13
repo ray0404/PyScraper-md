@@ -501,6 +501,7 @@ class Scraper:
 
         base_domain = urlparse(base_url).netloc
         seen = set()
+        clean_base_url = base_url.split('#')[0].split('?')[0]
         
         for element in search_scope:
             if not element: continue
@@ -517,7 +518,7 @@ class Scraper:
                 clean_url = full_url.split('#')[0].split('?')[0]
                 
                 # Avoid self-ref
-                if clean_url == base_url.split('#')[0].split('?')[0]:
+                if clean_url == clean_base_url:
                     continue
 
                 if clean_url in seen:
@@ -547,6 +548,7 @@ class Scraper:
         links = []
         base_domain = urlparse(base_url).netloc
         seen = set()
+        clean_base_url = base_url.split('#')[0].split('?')[0]
 
         for a in soup.find_all('a', href=True):
             href = a['href']
@@ -568,7 +570,7 @@ class Scraper:
             clean_url = full_url.split('#')[0].split('?')[0]
             
             # Avoid self-ref
-            if clean_url == base_url.split('#')[0].split('?')[0]:
+            if clean_url == clean_base_url:
                 continue
 
             if clean_url in seen:
