@@ -341,6 +341,22 @@ class Scraper:
                 curr = curr.parent
             factory = curr if isinstance(curr, BeautifulSoup) else BeautifulSoup('', 'lxml')
 
+        # 0. Pre-process: Detect div-based code blocks (common in modern frameworks like Docusaurus/StyleX)
+        # Look for monospace classes or common code block patterns
+        MONOSPACE_CLASSES = re.compile(r'monospace|code-block|code-snippet|x1iwq0vh', re.I)
+        for div in soup.find_all('div', class_=lambda c: c and any(cls for cls in (c if isinstance(c, list) else [c]) if MONOSPACE_CLASSES.search(cls))):
+            # If it's not already inside a pre/code block and contains text
+            if not div.find_parent(['pre', 'code']) and div.text.strip():
+                # Check if it looks like a block (has multiple lines or specific classes)
+                # or if it's a leaf node containing code
+                if not div.find(['div', 'p']):
+                    pre = factory.new_tag('pre')
+                    code = factory.new_tag('code')
+                    # Preserve contents (including <br> if any)
+                    code.extend(div.contents)
+                    pre.append(code)
+                    div.replace_with(pre)
+
         # 1. Handle SVGs
         placeholders = {}
         preserved_svg_nodes = []
