@@ -318,3 +318,26 @@ def test_scrape_integration_sample():
         # Boilerplate should be gone
         assert "Home" not in result['markdown']
         assert "&copy;" not in result['markdown']
+
+def test_to_markdown_tag_object():
+    """Regression test for 'NoneType' object is not callable when passing a Tag with SVG."""
+    from bs4 import BeautifulSoup
+    scraper = Scraper()
+    html = """
+    <html>
+        <body>
+            <main id="content">
+                <h1>Title</h1>
+                <svg width="10" height="10"><circle r="5" /></svg>
+            </main>
+        </body>
+    </html>
+    """
+    soup = BeautifulSoup(html, 'lxml')
+    main_tag = soup.find('main')
+    
+    # This used to raise TypeError: 'NoneType' object is not callable
+    markdown = scraper.to_markdown(main_tag, svg_action='image')
+    
+    assert "# Title" in markdown
+    assert "![svg image](data:image/svg+xml;base64," in markdown

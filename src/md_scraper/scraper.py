@@ -332,6 +332,15 @@ class Scraper:
         else:
             soup = BeautifulSoup(html, 'lxml')
 
+        # Ensure we have a BeautifulSoup instance for creating new tags
+        # Tag.new_tag often returns None because it's shadowed by __getattr__
+        factory = soup
+        if not isinstance(factory, BeautifulSoup):
+            curr = soup
+            while curr.parent:
+                curr = curr.parent
+            factory = curr if isinstance(curr, BeautifulSoup) else BeautifulSoup('', 'lxml')
+
         # 1. Handle SVGs
         placeholders = {}
         preserved_svg_nodes = []
@@ -367,11 +376,11 @@ class Scraper:
                     with open(filepath, 'w') as f:
                         f.write(svg_str)
                     # Use relative path for Markdown
-                    img_tag = soup.new_tag('img', src=os.path.join(os.path.basename(assets_dir), filename), alt="svg icon")
+                    img_tag = factory.new_tag('img', src=os.path.join(os.path.basename(assets_dir), filename), alt="svg icon")
                 else:
                     # Default: base64 image
                     encoded = base64.b64encode(svg_str.encode('utf-8')).decode('utf-8')
-                    img_tag = soup.new_tag('img', src=f"data:image/svg+xml;base64,{encoded}", alt="svg image")
+                    img_tag = factory.new_tag('img', src=f"data:image/svg+xml;base64,{encoded}", alt="svg image")
                 
                 svg.replace_with(img_tag)
         elif svg_action == 'preserve':
