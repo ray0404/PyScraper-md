@@ -11,11 +11,14 @@
 *   **Dynamic Support:** Handles JS-heavy sites via Playwright.
 *   **Remote Offloading:** Can delegate scraping to a remote server (Cloud Run), useful for restricted environments like Termux.
 
-## Performance Optimizations
+## Performance & Features (v0.2.x)
 
-Recent updates have significantly improved the core processing speed of the scraper:
+*   **Proxy & UA Rotation:** Supports proxy server URLs (`--proxy`) and User-Agent headers/random rotation (`--user-agent` / `-ua`).
+*   **Retries & Delays:** Exponential backoff retry logic (`--retries`) and configurable inter-request delays (`--delay`).
+*   **Heuristic Language Detection:** Automatic programming language detection (`bash`, `json`, `sql`, `javascript`, etc.) for markdown code fences.
+*   **Robust Semantic Extraction:** Prioritizes W3C `<main>` and `[role="main"]` containers with anchored regex matching to preserve full document verbosity and eliminate boilerplate/noise.
 *   **Link Extraction:** Optimized by moving redundant string operations (`base_url` cleaning) out of recursive loops, resulting in a **2.6x speedup** for large page link parsing.
-*   **Regex Sanitization:** All Markdown sanitization patterns are now pre-compiled at the class level in `MarkdownSanitizer`, reducing instantiation overhead and increasing overall throughput by ~2.2%.
+*   **Regex Sanitization:** All Markdown sanitization patterns are pre-compiled at the class level in `MarkdownSanitizer`, reducing instantiation overhead and increasing overall throughput by ~2.2%.
 *   **Crawler Efficiency:** The crawler subpath check was refactored to use tuple-based `startswith` checks, providing a ~90% performance boost in path validation logic.
 
 ## Architecture & Key Files
