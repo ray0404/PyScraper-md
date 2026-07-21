@@ -72,15 +72,12 @@ def test_scrape_command_options_passing():
         # Test dynamic and strip passing
         runner.invoke(cli, ['scrape', url, '--dynamic', '--strip', 'a', '--strip', 'img'])
 
-        mock_scraper_instance.scrape.assert_called_once_with(
-            url,
-            dynamic=True,
-            strip=['a', 'img'],
-            svg_action='image',
-            image_action='remote',
-            assets_dir=None,
-            base_url=url
-        )
+        mock_scraper_instance.scrape.assert_called_once()
+        kwargs = mock_scraper_instance.scrape.call_args.kwargs
+        assert kwargs['dynamic'] is True
+        assert kwargs['strip'] == ['a', 'img']
+        assert kwargs['svg_action'] == 'image'
+        assert kwargs['image_action'] == 'remote'
 
 def test_scrape_command_svg_action_passing():
     runner = CliRunner()
@@ -93,11 +90,31 @@ def test_scrape_command_svg_action_passing():
 
         runner.invoke(cli, ['scrape', url, '--svg-action', 'preserve'])
 
-        mock_scraper_instance.scrape.assert_called_once_with(
-            url,
-            dynamic=False,
-            svg_action='preserve',
-            image_action='remote',
-            assets_dir=None,
-            base_url=url
+        mock_scraper_instance.scrape.assert_called_once()
+        kwargs = mock_scraper_instance.scrape.call_args.kwargs
+        assert kwargs['svg_action'] == 'preserve'
+
+def test_scrape_command_proxy_ua_delay_retries():
+    runner = CliRunner()
+    url = "https://example.com"
+
+    with patch("md_scraper.cli.Scraper") as mock_scraper_class:
+        mock_scraper_instance = mock_scraper_class.return_value
+        mock_scraper_instance.__enter__.return_value = mock_scraper_instance
+        mock_scraper_instance.scrape.return_value = {'markdown': "ok", 'metadata': {}}
+
+        result = runner.invoke(cli, [
+            'scrape', url,
+            '--proxy', 'http://127.0.0.1:8080',
+            '-ua', 'CustomUA/2.0',
+            '--delay', '0.5',
+            '--retries', '5'
+        ])
+
+        assert result.exit_code == 0
+        mock_scraper_class.assert_called_with(
+            proxy='http://127.0.0.1:8080',
+            user_agent='CustomUA/2.0',
+            delay=0.5,
+            retries=5
         )

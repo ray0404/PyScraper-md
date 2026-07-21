@@ -5,7 +5,7 @@ import base64
 import email
 import re
 import concurrent.futures
-from typing import Union
+from typing import Union, Optional, List, Dict
 from email import policy
 from urllib.parse import urljoin, urlparse
 from bs4 import BeautifulSoup, Tag, PageElement
@@ -28,10 +28,43 @@ class Scraper:
     using heuristics, and converting the resulting DOM to GitHub Flavored Markdown.
     """
 
-    def __init__(self):
+    DEFAULT_USER_AGENTS = [
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Safari/605.1.15",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:127.0) Gecko/20100101 Firefox/127.0",
+    ]
+
+    def __init__(
+        self,
+        proxy: Optional[str] = None,
+        user_agent: Optional[str] = None,
+        delay: float = 0.0,
+        timeout: int = 30,
+        retries: int = 3
+    ):
+        self.proxy = proxy
+        self.user_agent = user_agent
+        self.delay = delay
+        self.timeout = timeout
+        self.retries = retries
         self._playwright = None
         self._browser = None
         self.sanitizer = MarkdownSanitizer()
+
+    def get_user_agent(self, custom_ua: Optional[str] = None) -> str:
+        """
+        Returns configured user agent or selects a random realistic one.
+        
+        Args:
+            custom_ua: Optional override string. If 'random', selects from DEFAULT_USER_AGENTS.
+        """
+        target = custom_ua if custom_ua is not None else self.user_agent
+        if target and target != 'random':
+            return target
+        import random
+        return random.choice(self.DEFAULT_USER_AGENTS)
 
     def __enter__(self):
         return self
@@ -48,13 +81,15 @@ class Scraper:
             self._playwright.stop()
             self._playwright = None
 
-    def _ensure_browser(self):
+    def _ensure_browser(self, proxy: Optional[str] = None):
         """Lazily initializes Playwright and the Browser instance."""
         if sync_playwright is None:
             raise ImportError("Playwright is not installed. Please install it with 'pip install playwright' and 'playwright install'.")
 
         if not self._playwright:
             self._playwright = sync_playwright().start()
+
+        target_proxy = proxy or self.proxy
 
         if not self._browser:
             # Check for CHROMIUM_PATH environment variable (useful for Termux/custom setups)
@@ -66,32 +101,202 @@ class Scraper:
                 launch_args["executable_path"] = executable_path
                 launch_args["args"] = ['--no-sandbox', '--disable-gpu'] # Often needed for custom binaries
 
+            if target_proxy:
+                launch_args["proxy"] = {"server": target_proxy}
+
             self._browser = self._playwright.chromium.launch(**launch_args)
 
         return self._browser
 
-    def fetch_html(self, url: str) -> str:
+    def _detect_code_language(self, el) -> str:
+        """
+        Detect the programming language of a code element for markdown code fences.
+        
+        First tries to find explicit language-* classes, then falls back to
+        content-based heuristics for common languages.
+        
+        Args:
+            el: A BeautifulSoup element (typically a div, pre, or code tag)
+            
+        Returns:
+            str: The detected language (e.g., 'python', 'javascript') or empty string
+        """
+        # First try existing language-* class detection (standard approach)
+        if el.get('class'):
+            classes = el.get('class') if isinstance(el.get('class'), list) else [el.get('class')]
+            for cls in classes:
+                if isinstance(cls, str) and cls.startswith('language-'):
+                    return cls.replace('language-', '')
+        
+        # If no language-* class, try to infer from content
+        text = el.get_text() if hasattr(el, 'get_text') else str(el)
+        text_stripped = text.strip()
+        
+        # Return empty for empty content
+        if not text_stripped:
+            return ''
+        
+        # Bash/Shell heuristics (check before Python to prevent CLI instructions from being misclassified as Python)
+        bash_patterns = [
+            r'#!\s*/bin/(ba)?sh',  # shebang
+            r'\$\{?\w+\}?',        # variable expansion
+            r'\$\(',               # command substitution
+            r'`[^`]*`',            # backticks
+            r'\s+[|&]\s+',         # pipes and background
+            r'^\s*(?:npm|npx|pip|poetry|git|cargo|docker|curl|wget|jref|cd|mkdir|ls|sudo|yarn|pnpm|gcloud|aws|kubectl|make|python|node|bash|sh|cat|echo|chmod|chown|systemctl|service)\b',
+        ]
+        if any(re.search(pattern, text, re.MULTILINE) for pattern in bash_patterns):
+            return 'bash'
+
+        # Python heuristics
+        python_patterns = [
+            r'def\s+\w+\s*\(',  # function definition
+            r'class\s+\w+\s*[\:\(]', # class definition
+            r'->\s*\w+',        # type hints
+            r'import\s+\w+',     # import statement
+            r'from\s+\w+\s+import',  # from import
+            r'#\s*type:\s*',    # type comment
+            r'if\s+__name__\s*==\s*["\']__main__["\']',  # main guard
+        ]
+        if any(re.search(pattern, text, re.MULTILINE) for pattern in python_patterns):
+            return 'python'
+        
+        # JavaScript heuristics
+        js_patterns = [
+            r'function\s+\w+\s*\(',  # function declaration
+            r'const\s+\w+\s*=',      # const declaration
+            r'let\s+\w+\s*=',        # let declaration
+            r'var\s+\w+\s*=',        # var declaration
+            r'=>',                   # arrow function
+            r'\{\s*\}',              # object literal
+            r'\[[^\]]*\]',           # array literal
+            r'document\.',           # DOM access
+            r'console\.',            # console
+        ]
+        if any(re.search(pattern, text) for pattern in js_patterns):
+            return 'javascript'
+        
+        # HTML/XML heuristics
+        html_patterns = [
+            r'<\s*\w+[^>]*>',      # HTML tag
+            r'<\s*/\s*\w+\s*>',    # closing tag
+            r'&[a-zA-Z]+;',        # HTML entity
+        ]
+        if any(re.search(pattern, text, re.IGNORECASE) for pattern in html_patterns):
+            # Check if it looks like HTML/XML (has tags)
+            if re.search(r'<\s*\w+[^>]*>.*<\s*/\s*\w+\s*>', text, re.DOTALL | re.IGNORECASE):
+                return 'html'
+        
+        # CSS heuristics
+        css_patterns = [
+            r'\.\s*\w+',           # class selector
+            r'\#\s*\w+',           # id selector
+            r'\w+\s*\{[^}]*\}',    # property: value;
+            r'@media',             # media query
+            r'@import',            # import
+        ]
+        if any(re.search(pattern, text) for pattern in css_patterns):
+            # Check if it looks like CSS (properties and values)
+            if re.search(r'[\w-]+\s*:', text) and '{' in text and '}' in text:
+                return 'css'
+        
+        # JSON heuristics
+        if text_stripped.startswith('{') and text_stripped.endswith('}'):
+            try:
+                import json
+                json.loads(text_stripped)
+                return 'json'
+            except:
+                pass
+        if text_stripped.startswith('[') and text_stripped.endswith(']'):
+            try:
+                import json
+                json.loads(text_stripped)
+                return 'json'
+            except:
+                pass
+        
+        # SQL heuristics
+        sql_patterns = [
+            r'SELECT\s+.+\s+FROM',
+            r'INSERT\s+INTO',
+            r'UPDATE\s+.+\s+SET',
+            r'DELETE\s+FROM',
+            r'CREATE\s+TABLE',
+            r'ALTER\s+TABLE',
+            r'DROP\s+TABLE',
+        ]
+        if any(re.search(pattern, text, re.IGNORECASE) for pattern in sql_patterns):
+            return 'sql'
+        
+        # Default to empty string (no language specifier)
+        return ''
+
+    def fetch_html(
+        self,
+        url: str,
+        proxy: Optional[str] = None,
+        user_agent: Optional[str] = None,
+        delay: Optional[float] = None,
+        retries: Optional[int] = None
+    ) -> str:
         """
         Fetches the raw HTML content from a given URL or local file.
         
         Args:
             url (str): The URL of the webpage or path to a local file.
+            proxy (str): Optional proxy URL override.
+            user_agent (str): Optional custom User-Agent or 'random'.
+            delay (float): Optional delay in seconds before request.
+            retries (int): Optional max retries on request failure.
             
         Returns:
             str: The raw HTML content.
-            
-        Raises:
-            requests.exceptions.HTTPError: If the request returned an unsuccessful status code.
-            FileNotFoundError: If the local file does not exist.
         """
         # 1. Check if it's a local file
         if os.path.exists(url) and os.path.isfile(url):
             return self._read_local_file(url)
 
-        # 2. Existing requests logic
-        response = requests.get(url)
-        response.raise_for_status()
-        return response.text
+        req_delay = delay if delay is not None else self.delay
+        req_retries = retries if retries is not None else self.retries
+        target_proxy = proxy or self.proxy
+        ua = self.get_user_agent(user_agent)
+
+        proxies = None
+        if target_proxy:
+            proxies = {'http': target_proxy, 'https': target_proxy}
+
+        headers = {
+            'User-Agent': ua,
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.5',
+        }
+
+        import time
+        last_exception = None
+
+        for attempt in range(req_retries + 1):
+            if req_delay > 0:
+                time.sleep(req_delay)
+            try:
+                response = requests.get(url, headers=headers, proxies=proxies, timeout=self.timeout)
+                response.raise_for_status()
+                return response.text
+            except requests.exceptions.RequestException as e:
+                last_exception = e
+                # Retry on connection/timeout error or server status codes 429, 500, 502, 503, 504
+                if attempt < req_retries and (
+                    isinstance(e, (requests.exceptions.ConnectionError, requests.exceptions.Timeout)) or
+                    (getattr(e, 'response', None) is not None and e.response.status_code in [429, 500, 502, 503, 504])
+                ):
+                    backoff = 2 ** attempt
+                    time.sleep(backoff)
+                    continue
+                raise e
+
+        if last_exception:
+            raise last_exception
+        raise requests.exceptions.RequestException(f"Failed to fetch {url}")
 
     def _read_local_file(self, file_path: str) -> str:
         """
@@ -140,25 +345,35 @@ class Scraper:
             with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
                 return f.read()
 
-    def fetch_html_dynamic(self, url: str) -> str:
+    def fetch_html_dynamic(
+        self,
+        url: str,
+        proxy: Optional[str] = None,
+        user_agent: Optional[str] = None,
+        delay: Optional[float] = None
+    ) -> str:
         """
         Fetches the rendered HTML content from a given URL using Playwright.
         
         Args:
             url (str): The URL of the webpage to fetch.
+            proxy (str): Optional proxy URL override.
+            user_agent (str): Optional custom User-Agent or 'random'.
+            delay (float): Optional delay in seconds before request.
             
         Returns:
             str: The rendered HTML content of the page.
-            
-        Raises:
-            ImportError: If Playwright is not installed.
-            Exception: If browser launch or page navigation fails.
         """
-        browser = self._ensure_browser()
-        page = browser.new_page()
+        req_delay = delay if delay is not None else self.delay
+        if req_delay > 0:
+            import time
+            time.sleep(req_delay)
+
+        browser = self._ensure_browser(proxy=proxy)
+        ua = self.get_user_agent(user_agent)
+        context = browser.new_context(user_agent=ua, viewport={"width": 1280, "height": 800})
+        page = context.new_page()
         try:
-            # Set a reasonable viewport size
-            page.set_viewport_size({"width": 1280, "height": 800})
             page.goto(url, wait_until="networkidle")
 
             # Bake computed styles into SVGs so they render correctly in Markdown
@@ -219,16 +434,30 @@ class Scraper:
         else:
             soup = html
         
-        # Remove boilerplate
+        # Remove boilerplate tags and common UI clutter containers
         for tag in soup(['nav', 'footer', 'header', 'aside', 'script', 'style']):
             tag.decompose()
             
-        # Try to find main content
-        main_content = soup.find('main')
-        if not main_content:
-            main_content = soup.find('article')
-        if not main_content:
-            main_content = soup.find('div', class_=['content', 'main', 'post-content'])
+        # Decompose known noise elements by class/id (e.g., GitHub sidebars, repo headers, footers)
+        noise_selectors = [
+            '.Layout-sidebar', '.js-header-wrapper', '.Header',
+            '#repository-container-header', '.js-footer-container',
+            '.site-footer', '.footer'
+        ]
+        for selector in noise_selectors:
+            for el in soup.select(selector):
+                el.decompose()
+
+        # Try to find main article / README content first (more specific than generic <main>)
+        main_content = (
+            soup.find('article') or 
+            soup.find(class_=re.compile(r'markdown-body|article-content|entry-content|post-content', re.I)) or 
+            soup.find(id=re.compile(r'readme|article|content', re.I)) or
+            soup.find(attrs={'itemprop': 'articleBody'}) or
+            soup.find(attrs={'role': 'main'}) or
+            soup.find('main') or
+            soup.find('div', class_=['content', 'main', 'post-content'])
+        )
             
         result = main_content or soup.body or soup
         return result if as_soup else str(result)
@@ -470,7 +699,7 @@ class Scraper:
         defaults = {
             'heading_style': 'ATX',
             'bullets': '-',
-            'code_language_callback': lambda el: el.get('class', [''])[0].replace('language-', '') if el.get('class') else ''
+            'code_language_callback': lambda el: self._detect_code_language(el)
         }
         
         # Merge with user options
@@ -606,7 +835,16 @@ class Scraper:
             
         return links
 
-    def scrape(self, url: str, dynamic: bool = False, **options) -> dict:
+    def scrape(
+        self,
+        url: str,
+        dynamic: bool = False,
+        proxy: Optional[str] = None,
+        user_agent: Optional[str] = None,
+        delay: Optional[float] = None,
+        retries: Optional[int] = None,
+        **options
+    ) -> dict:
         """
         Orchestrates the full scraping flow: fetch, extract metadata, 
         extract main content, and convert to Markdown.
@@ -614,15 +852,19 @@ class Scraper:
         Args:
             url (str): The URL of the webpage to scrape.
             dynamic (bool): Whether to use Playwright for dynamic rendering.
+            proxy (str): Optional proxy URL override.
+            user_agent (str): Optional custom User-Agent or 'random'.
+            delay (float): Optional delay in seconds before request.
+            retries (int): Optional max retries on request failure.
             **options: Additional options for Markdown conversion.
             
         Returns:
             dict: A dictionary containing 'url', 'metadata', 'markdown', 'raw_html', and 'nav_links'.
         """
         if dynamic:
-            html = self.fetch_html_dynamic(url)
+            html = self.fetch_html_dynamic(url, proxy=proxy, user_agent=user_agent, delay=delay)
         else:
-            html = self.fetch_html(url)
+            html = self.fetch_html(url, proxy=proxy, user_agent=user_agent, delay=delay, retries=retries)
             
         # Parse once to avoid redundant parsing
         soup = BeautifulSoup(html, 'lxml')

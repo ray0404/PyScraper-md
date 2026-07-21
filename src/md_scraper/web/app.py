@@ -12,10 +12,9 @@ from md_scraper.crawler import Crawler
 
 app = Flask(__name__)
 
-def process_crawling(iterator, crawl, dynamic, svg_action, image_action, strip_tags):
+def process_crawling(iterator, crawl, dynamic, svg_action, image_action, strip_tags, proxy=None, user_agent=None, delay=0.0, retries=3):
     # Determine the start URL and whether it's a batch
     # We will just manage a thread pool and a task queue
-    # Actually, we can use a simpler approach:
     # `iterator` is either `Crawler` or `zip`.
 
     results = []
@@ -26,13 +25,8 @@ def process_crawling(iterator, crawl, dynamic, svg_action, image_action, strip_t
     active_tasks_lock = threading.Lock()
 
     # Initialize task queue from iterator
-    # Note: If it's a zip object, we can just iterate over it fully
-    # If it's a Crawler, it yields the first URL
     try:
         if crawl and hasattr(iterator, 'has_next'):
-            # It's a crawler. We don't exhaust it, we just pull the first one
-            # Actually, `Crawler` queue might have multiple start_urls if it's passed a list
-            # We can pull all currently available URLs
             while iterator.has_next():
                 try:
                     task_queue.put(next(iterator))
@@ -52,33 +46,39 @@ def process_crawling(iterator, crawl, dynamic, svg_action, image_action, strip_t
         return results
 
     def worker():
-        # Each thread gets its own Scraper
-        with Scraper() as scraper:
-            while True:
-                item = task_queue.get()
-                if item is None:
-                    # Sentinel value to terminate
-                    task_queue.task_done()
-                    break
+        while True:
+            item = task_queue.get()
+            if item is None:
+                task_queue.task_done()
+                break
 
-                url, depth = item
+            url, depth = item
+            try:
                 try:
+                    scraper_cm = Scraper(proxy=proxy, user_agent=user_agent, delay=delay, retries=retries)
+                except TypeError:
+                    scraper_cm = Scraper()
+
+                with scraper_cm as scraper:
                     res = scraper.scrape(
                         url,
                         dynamic=dynamic,
                         svg_action=svg_action,
                         image_action=image_action,
-                        strip=strip_tags
+                        strip=strip_tags,
+                        proxy=proxy,
+                        user_agent=user_agent,
+                        delay=delay,
+                        retries=retries
                     )
                     result_queue.put((res, depth, None))
-                except Exception as e:
-                    result_queue.put((None, depth, e))
-                finally:
-                    task_queue.task_done()
+            except Exception as e:
+                result_queue.put((None, depth, e))
+            finally:
+                task_queue.task_done()
 
     # Start workers
     num_workers = min(5, active_tasks) if active_tasks > 0 else 5
-    # If crawl is true, we might discover more tasks, so always start max_workers
     if crawl: num_workers = 5
 
     threads = []
@@ -102,7 +102,6 @@ def process_crawling(iterator, crawl, dynamic, svg_action, image_action, strip_t
                     links = res.get('internal_links') or []
                     iterator.add_links(links, depth)
 
-                    # After adding links, the Crawler queue might have new items
                     while iterator.has_next():
                         try:
                             task_queue.put(next(iterator))
@@ -111,14 +110,12 @@ def process_crawling(iterator, crawl, dynamic, svg_action, image_action, strip_t
                         except StopIteration:
                             break
             else:
-                # If single URL, raise so caller handles it
                 if not crawl:
                     raise error
 
             with active_tasks_lock:
                 active_tasks -= 1
     finally:
-        # Stop workers
         for _ in range(num_workers):
             task_queue.put(None)
         for t in threads:
@@ -141,6 +138,10 @@ def api_scrape():
     depth = int(data.get('depth', 3))
     max_pages = int(data.get('max_pages', 10))
     only_subpaths = data.get('only_subpaths', False)
+    proxy = data.get('proxy')
+    user_agent = data.get('user_agent')
+    delay = float(data.get('delay', 0.0))
+    retries = int(data.get('retries', 3))
 
     try:
         if crawl:
@@ -148,10 +149,11 @@ def api_scrape():
         else:
              iterator = zip([url], [0])
              
-        results = process_crawling(iterator, crawl, dynamic, svg_action, image_action, strip_tags)
+        results = process_crawling(
+            iterator, crawl, dynamic, svg_action, image_action, strip_tags,
+            proxy=proxy, user_agent=user_agent, delay=delay, retries=retries
+        )
         
-        # Return a list of results when crawling to support multiple pages.
-        # For a single URL request (crawl=False), return a single dict for backward compatibility.
         if crawl:
              return jsonify({'results': results})
         else:

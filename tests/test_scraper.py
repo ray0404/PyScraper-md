@@ -15,7 +15,8 @@ def test_fetch_html_success():
         
         result = scraper.fetch_html(url)
         
-        mock_get.assert_called_once_with(url)
+        mock_get.assert_called_once()
+        assert mock_get.call_args[0][0] == url
         assert result == html_content
 
 def test_fetch_html_failure():
@@ -341,3 +342,80 @@ def test_to_markdown_tag_object():
     
     assert "# Title" in markdown
     assert "![svg image](data:image/svg+xml;base64," in markdown
+
+def test_detect_code_language_bash():
+    from bs4 import BeautifulSoup
+    scraper = Scraper()
+    
+    # Test shell command block with comments
+    html = "<pre><code># From source\nnpm install\nnpm run build</code></pre>"
+    soup = BeautifulSoup(html, 'lxml')
+    code_el = soup.find('code')
+    lang = scraper._detect_code_language(code_el)
+    assert lang == 'bash'
+
+def test_extract_main_content_github_readme():
+    scraper = Scraper()
+    html = """
+    <html>
+        <body>
+            <div class="js-header-wrapper">GitHub Header</div>
+            <main>
+                <div id="repository-container-header">Repo Nav / Star / Fork</div>
+                <div class="Layout-sidebar">Sidebar content / Stars 0</div>
+                <article class="markdown-body">
+                    <h1>Jref - JSON Reference CLI</h1>
+                    <p>Lightweight tool.</p>
+                </article>
+            </main>
+        </body>
+    </html>
+    """
+    extracted = scraper.extract_main_content(html)
+    assert "Jref - JSON Reference CLI" in extracted
+    assert "GitHub Header" not in extracted
+    assert "Sidebar content" not in extracted
+    assert "Repo Nav" not in extracted
+
+def test_fetch_html_proxy_and_user_agent():
+    scraper = Scraper(proxy="http://127.0.0.1:8080", user_agent="CustomAgent/1.0", retries=0)
+    url = "https://example.com"
+    html_content = "<html><body><p>Proxy test</p></body></html>"
+    
+    with patch('requests.get') as mock_get:
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.text = html_content
+        mock_get.return_value = mock_response
+        
+        result = scraper.fetch_html(url)
+        
+        mock_get.assert_called_once()
+        _, kwargs = mock_get.call_args
+        assert kwargs['proxies'] == {'http': 'http://127.0.0.1:8080', 'https': 'http://127.0.0.1:8080'}
+        assert kwargs['headers']['User-Agent'] == "CustomAgent/1.0"
+        assert result == html_content
+
+def test_fetch_html_random_user_agent():
+    scraper = Scraper(user_agent="random")
+    ua = scraper.get_user_agent()
+    assert ua in Scraper.DEFAULT_USER_AGENTS
+
+def test_fetch_html_retries():
+    scraper = Scraper(retries=2, delay=0.0)
+    url = "https://example.com/retry"
+    
+    from requests.exceptions import HTTPError, RequestException
+    mock_resp_fail = MagicMock()
+    mock_resp_fail.status_code = 503
+    mock_resp_fail.raise_for_status.side_effect = HTTPError("503 Service Unavailable", response=mock_resp_fail)
+    
+    mock_resp_success = MagicMock()
+    mock_resp_success.status_code = 200
+    mock_resp_success.text = "<html><body>Success</body></html>"
+    
+    with patch('requests.get', side_effect=[mock_resp_fail.raise_for_status.side_effect, mock_resp_success]) as mock_get:
+        with patch('time.sleep'):
+            result = scraper.fetch_html(url)
+            assert result == "<html><body>Success</body></html>"
+            assert mock_get.call_count == 2

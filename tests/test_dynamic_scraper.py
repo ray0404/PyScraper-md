@@ -17,7 +17,10 @@ def test_fetch_html_dynamic_success():
         mock_sync_playwright.return_value.__enter__.return_value = mock_p
         mock_sync_playwright.return_value.start.return_value = mock_p
 
+        mock_context = MagicMock()
         mock_p.chromium.launch.return_value = mock_browser
+        mock_browser.new_context.return_value = mock_context
+        mock_context.new_page.return_value = mock_page
         mock_browser.new_page.return_value = mock_page
         mock_page.content.return_value = expected_html
         
@@ -25,7 +28,8 @@ def test_fetch_html_dynamic_success():
         
         assert html == expected_html
         mock_p.chromium.launch.assert_called_once()
-        mock_page.set_viewport_size.assert_called_once_with({"width": 1280, "height": 800})
+        mock_browser.new_context.assert_called_once()
+        assert mock_browser.new_context.call_args.kwargs['viewport'] == {"width": 1280, "height": 800}
         mock_page.goto.assert_called_with(url, wait_until='networkidle')
 
 def test_fetch_html_dynamic_missing_playwright():

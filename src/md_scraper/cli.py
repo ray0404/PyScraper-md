@@ -7,7 +7,7 @@ from md_scraper.scraper import Scraper
 from md_scraper.utils import sanitize_filename, get_title_from_result
 from md_scraper.crawler import Crawler
 
-def process_url_logic(url, server, dynamic, strip, svg_action, image_action, assets_dir, scraper=None):
+def process_url_logic(url, server, dynamic, strip, svg_action, image_action, assets_dir, proxy=None, user_agent=None, delay=0.0, retries=3, scraper=None):
     """Helper to process a single URL (local or remote). Returns result dict."""
     if server:
         # Remote scraping mode
@@ -17,7 +17,11 @@ def process_url_logic(url, server, dynamic, strip, svg_action, image_action, ass
             'dynamic': dynamic,
             'svg_action': svg_action,
             'image_action': image_action,
-            'strip_tags': list(strip) if strip else []
+            'strip_tags': list(strip) if strip else [],
+            'proxy': proxy,
+            'user_agent': user_agent,
+            'delay': delay,
+            'retries': retries
         }
         try:
             response = requests.post(api_url, json=payload)
@@ -29,29 +33,27 @@ def process_url_logic(url, server, dynamic, strip, svg_action, image_action, ass
             raise Exception(f"Connection error: {e}")
     else:
         # Local scraping mode
-        # Use provided scraper or create a temporary one
+        scrape_options = {
+            'svg_action': svg_action,
+            'image_action': image_action,
+            'assets_dir': assets_dir,
+            'base_url': url,
+            'proxy': proxy,
+            'user_agent': user_agent,
+            'delay': delay,
+            'retries': retries
+        }
+        if strip:
+            scrape_options['strip'] = list(strip)
+
         if scraper:
-            scrape_options = {
-                'svg_action': svg_action,
-                'image_action': image_action,
-                'assets_dir': assets_dir,
-                'base_url': url
-            }
-            if strip:
-                scrape_options['strip'] = list(strip)
             return scraper.scrape(url, dynamic=dynamic, **scrape_options)
         else:
-            with Scraper() as temp_scraper:
-                # Pass options to scrape method
-                scrape_options = {
-                    'svg_action': svg_action,
-                    'image_action': image_action,
-                    'assets_dir': assets_dir,
-                    'base_url': url
-                }
-                if strip:
-                    scrape_options['strip'] = list(strip)
-
+            try:
+                scraper_cm = Scraper(proxy=proxy, user_agent=user_agent, delay=delay, retries=retries)
+            except TypeError:
+                scraper_cm = Scraper()
+            with scraper_cm as temp_scraper:
                 return temp_scraper.scrape(url, dynamic=dynamic, **scrape_options)
 
 @click.group()
@@ -71,7 +73,11 @@ def cli():
 @click.option('--depth', type=int, default=3, help='Crawling depth (default: 3).')
 @click.option('--max-pages', type=int, default=10, help='Maximum number of pages to crawl per initial URL (default: 10).')
 @click.option('--only-subpaths', is_flag=True, default=False, help='Restrict crawling to subpaths of the initial URL(s).')
-def scrape(urls, output, dynamic, strip, svg_action, image_action, assets_dir, server, crawl, depth, max_pages, only_subpaths):
+@click.option('--proxy', help='Proxy server URL (e.g., http://proxy:8080, socks5://127.0.0.1:1080).')
+@click.option('--user-agent', '-ua', help='Custom User-Agent header or "random" for rotating User-Agents.')
+@click.option('--delay', type=float, default=0.0, help='Delay in seconds between requests (default: 0.0).')
+@click.option('--retries', type=int, default=3, help='Max retry attempts on request failure (default: 3).')
+def scrape(urls, output, dynamic, strip, svg_action, image_action, assets_dir, server, crawl, depth, max_pages, only_subpaths, proxy, user_agent, delay, retries):
     """Scrape URL(s) and print/save Markdown.
     
     URLS can be web links or a path to a text file containing URLs.
@@ -121,7 +127,13 @@ def scrape(urls, output, dynamic, strip, svg_action, image_action, assets_dir, s
     try:
         # We use a context manager to reuse the Scraper instance across multiple URLs if local
         from contextlib import nullcontext
-        scraper_cm = Scraper() if not server else nullcontext()
+        if server:
+            scraper_cm = nullcontext()
+        else:
+            try:
+                scraper_cm = Scraper(proxy=proxy, user_agent=user_agent, delay=delay, retries=retries)
+            except TypeError:
+                scraper_cm = Scraper()
         
         with scraper_cm as scraper:
             for current_url, current_depth in iterator:
@@ -142,7 +154,10 @@ def scrape(urls, output, dynamic, strip, svg_action, image_action, assets_dir, s
                         else:
                             current_assets_dir = 'assets'
 
-                    result = process_url_logic(current_url, server, dynamic, strip, svg_action, image_action, current_assets_dir, scraper=scraper)
+                    result = process_url_logic(
+                        current_url, server, dynamic, strip, svg_action, image_action, current_assets_dir,
+                        proxy=proxy, user_agent=user_agent, delay=delay, retries=retries, scraper=scraper
+                    )
                     markdown = result.get('markdown', '')
                     
                     # Determine Output
