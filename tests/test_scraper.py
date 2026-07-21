@@ -419,3 +419,22 @@ def test_fetch_html_retries():
             result = scraper.fetch_html(url)
             assert result == "<html><body>Success</body></html>"
             assert mock_get.call_count == 2
+
+def test_extract_main_content_prefers_main_over_partial_id_matches():
+    scraper = Scraper()
+    html = """
+    <html>
+        <body>
+            <main>
+                <div id="user-query-content-0" class="query-content">Short initial query</div>
+                <div class="chat-container">
+                    <p>Full conversation content with comprehensive answer and details.</p>
+                </div>
+            </main>
+        </body>
+    </html>
+    """
+    extracted = scraper.extract_main_content(html)
+    assert "Full conversation content with comprehensive answer" in str(extracted)
+    assert "Short initial query" in str(extracted)
+

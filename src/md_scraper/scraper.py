@@ -448,14 +448,15 @@ class Scraper:
             for el in soup.select(selector):
                 el.decompose()
 
-        # Try to find main article / README content first (more specific than generic <main>)
+        # Primary selection prioritizing standard <main> / role="main", then article/content containers.
+        # Strict word matching for class/id patterns avoids matching partial string matches like 'user-query-content-0'.
         main_content = (
-            soup.find('article') or 
-            soup.find(class_=re.compile(r'markdown-body|article-content|entry-content|post-content', re.I)) or 
-            soup.find(id=re.compile(r'readme|article|content', re.I)) or
-            soup.find(attrs={'itemprop': 'articleBody'}) or
+            soup.find('main') or 
             soup.find(attrs={'role': 'main'}) or
-            soup.find('main') or
+            soup.find('article') or
+            soup.find(attrs={'itemprop': 'articleBody'}) or
+            soup.find(class_=re.compile(r'^(markdown-body|article-content|entry-content|post-content|main-content)$', re.I)) or 
+            soup.find(id=re.compile(r'^(readme|main-content|main_content|article)$', re.I)) or
             soup.find('div', class_=['content', 'main', 'post-content'])
         )
             
