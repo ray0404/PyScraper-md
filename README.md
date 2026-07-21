@@ -167,12 +167,25 @@ The `scraper-go.sh` script provides a user-friendly wizard for batch jobs.
 
 ### Web Interface
 
-Run the lightweight Flask UI:
+Run the lightweight Flask UI for development:
 
 ```bash
 poetry run python src/md_scraper/web/app.py
 ```
-Access at `http://127.0.0.1:8080`.
+
+Alternatively, run a production-ready Gunicorn server:
+
+```bash
+poetry run gunicorn --bind 0.0.0.0:8080 --workers 1 --threads 8 md_scraper.web.app:app
+```
+
+To run Gunicorn in the background (detached mode) using `nohup`:
+
+```bash
+nohup poetry run gunicorn --bind 0.0.0.0:8080 --workers 1 --threads 8 md_scraper.web.app:app > output.log 2>&1 &
+```
+
+Access the UI at `http://127.0.0.1:8080`.
 
 ### Python Library Usage
 

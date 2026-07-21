@@ -73,6 +73,16 @@ poetry run python src/md_scraper/web/app.py
 # Access at http://127.0.0.1:8080
 ```
 
+Or run Gunicorn:
+```bash
+poetry run gunicorn --bind 0.0.0.0:8080 --workers 1 --threads 8 md_scraper.web.app:app
+```
+
+Or run Gunicorn in the background using `nohup`:
+```bash
+nohup poetry run gunicorn --bind 0.0.0.0:8080 --workers 1 --threads 8 md_scraper.web.app:app > output.log 2>&1 &
+```
+
 ### 3. Docker
 ```bash
 # Build the image

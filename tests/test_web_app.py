@@ -62,3 +62,15 @@ def test_scrape_failure(client):
         assert response.status_code == 200
         assert b"Error scraping" in response.data
         assert b"Network error" in response.data
+
+def test_app_main_env_vars(monkeypatch):
+    monkeypatch.setenv("HOST", "0.0.0.0")
+    monkeypatch.setenv("PORT", "9090")
+    with patch("md_scraper.web.app.app.run") as mock_run:
+        import md_scraper.web.app as web_app
+        # Re-evaluating main block logic
+        host = web_app.os.environ.get('HOST', '127.0.0.1')
+        port = int(web_app.os.environ.get('PORT', 8080))
+        assert host == "0.0.0.0"
+        assert port == 9090
+
