@@ -62,3 +62,45 @@ def test_other_sanitizations(sanitizer):
 
     # HTML comments
     assert sanitizer.sanitize("Text <!-- comment --> more text") == "Text  more text"
+
+def test_fix_tables_missing_separator(sanitizer):
+    input_md = """Some text
+| Header 1 | Header 2 |
+| Data 1 | Data 2 |
+| Data 3 | Data 4 |
+More text"""
+    expected_md = """Some text
+| Header 1 | Header 2 |
+|---|---|
+| Data 1 | Data 2 |
+| Data 3 | Data 4 |
+More text"""
+    assert sanitizer.sanitize(input_md) == expected_md
+
+def test_fix_tables_existing_separator(sanitizer):
+    input_md = """Some text
+| Header 1 | Header 2 |
+|---|---|
+| Data 1 | Data 2 |
+More text"""
+    assert sanitizer.sanitize(input_md) == input_md
+
+def test_fix_tables_alignment_separator(sanitizer):
+    input_md = """Some text
+| Header 1 | Header 2 |
+|:---|---:|
+| Data 1 | Data 2 |
+More text"""
+    assert sanitizer.sanitize(input_md) == input_md
+
+def test_fix_tables_indented(sanitizer):
+    input_md = """Some text
+  | Header 1 | Header 2 |
+  | Data 1 | Data 2 |
+More text"""
+    expected_md = """Some text
+  | Header 1 | Header 2 |
+  |---|---|
+  | Data 1 | Data 2 |
+More text"""
+    assert sanitizer.sanitize(input_md) == expected_md
