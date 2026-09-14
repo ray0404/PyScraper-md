@@ -574,7 +574,7 @@ class Scraper:
         # 0. Pre-process: Detect div-based code blocks (common in modern frameworks like Docusaurus/StyleX)
         # Look for monospace classes or common code block patterns
         MONOSPACE_CLASSES = re.compile(r'monospace|code-block|code-snippet|x1iwq0vh', re.I)
-        for div in soup.find_all('div', class_=lambda c: c and any(cls for cls in (c if isinstance(c, list) else [c]) if MONOSPACE_CLASSES.search(cls))):
+        for div in soup.find_all('div', class_=MONOSPACE_CLASSES):
             # If it's not already inside a pre/code block and contains text
             if not div.find_parent(['pre', 'code']) and div.text.strip():
                 # Check if it looks like a block (has multiple lines or specific classes)
