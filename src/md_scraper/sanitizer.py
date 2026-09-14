@@ -58,21 +58,36 @@ class MarkdownSanitizer:
         lines = markdown.split('\n')
         fixed_lines = []
         
-        in_table = False
-        for i, line in enumerate(lines):
+        table_row_count = 0
+        for line in lines:
+            stripped = line.strip()
             # Very basic check for a table row: starts and ends with |
-            is_row = line.strip().startswith('|') and line.strip().endswith('|')
+            is_row = stripped.startswith('|') and stripped.endswith('|')
             
             if is_row:
-                if not in_table:
-                    in_table = True
-                
-                # If this is the second row of a table, ensure it's a separator
-                # markdownify usually handles this, but sometimes it's missing
-                # Check if it looks like |---|---|
-                pass # Placeholder for more complex table logic
+                table_row_count += 1
+                if table_row_count == 2:
+                    # Check if current line is already a separator line
+                    # A separator line should only contain '|', '-', ':', ' ', '\t'
+                    # If there are other characters, it's a data row and the separator is missing
+                    is_separator = not bool(re.sub(r'[\s|\-:]', '', stripped))
+
+                    if not is_separator:
+                        # Current row is NOT a separator, but it's the second row.
+                        # We need to insert a separator before this line based on the first row's columns.
+                        prev_line = fixed_lines[-1]
+                        # Preserve indentation of the first row
+                        indent_str = prev_line[:len(prev_line) - len(prev_line.lstrip())]
+
+                        num_cols = prev_line.strip().count('|') - 1
+                        if num_cols > 0:
+                            separator = indent_str + '|' + '|'.join(['---'] * num_cols) + '|'
+                            fixed_lines.append(separator)
+
+                        # We inserted a separator, so the current line is now the third row (data row)
+                        table_row_count += 1
             else:
-                in_table = False
+                table_row_count = 0
             
             fixed_lines.append(line)
             
