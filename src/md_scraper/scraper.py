@@ -755,6 +755,8 @@ class Scraper:
         search_scope = nav_elements if nav_elements else [soup.body] if soup.body else [soup]
 
         base_domain = urlparse(base_url).netloc
+        allowed_prefixes = (f"http://{base_domain}/", f"https://{base_domain}/")
+        exact_matches = {f"http://{base_domain}", f"https://{base_domain}"}
         seen = set()
         clean_base_url = base_url.split('#')[0].split('?')[0]
         
@@ -763,15 +765,14 @@ class Scraper:
             for a in element.find_all('a', href=True):
                 href = a['href']
                 full_url = urljoin(base_url, href)
-                parsed = urlparse(full_url)
-                
-                # Strict Filter: Must be same domain
-                if parsed.netloc != base_domain:
-                    continue
                 
                 # Filter: Remove anchors/fragments and queries to avoid dupes
                 clean_url = full_url.split('#')[0].split('?')[0]
                 
+                # Strict Filter: Must be same domain
+                if not (clean_url.startswith(allowed_prefixes) or clean_url in exact_matches):
+                    continue
+
                 # Avoid self-ref
                 if clean_url == clean_base_url:
                     continue
@@ -802,6 +803,8 @@ class Scraper:
 
         links = []
         base_domain = urlparse(base_url).netloc
+        allowed_prefixes = (f"http://{base_domain}/", f"https://{base_domain}/")
+        exact_matches = {f"http://{base_domain}", f"https://{base_domain}"}
         seen = set()
         clean_base_url = base_url.split('#')[0].split('?')[0]
 
@@ -812,11 +815,6 @@ class Scraper:
                 continue
 
             full_url = urljoin(base_url, href)
-            parsed = urlparse(full_url)
-            
-            # Strict Filter: Must be same domain
-            if parsed.netloc != base_domain:
-                continue
             
             # Filter: Remove anchors/fragments and queries to avoid dupes
             # Keep query params? Usually crawling wants unique pages. 
@@ -824,6 +822,10 @@ class Scraper:
             # For safety/simplicity, let's strip them for now unless they seem vital.
             clean_url = full_url.split('#')[0].split('?')[0]
             
+            # Strict Filter: Must be same domain
+            if not (clean_url.startswith(allowed_prefixes) or clean_url in exact_matches):
+                continue
+
             # Avoid self-ref
             if clean_url == clean_base_url:
                 continue
