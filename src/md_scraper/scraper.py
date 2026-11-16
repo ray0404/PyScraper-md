@@ -556,6 +556,12 @@ class Scraper:
         image_action = options.pop('image_action', 'remote')
         assets_dir = options.pop('assets_dir', None)
         base_url = options.pop('base_url', None)
+        # If False, the processed image sources are left in the soup instead
+        # of being restored to their originals. scrape() uses this so the
+        # HTML captured from the soup afterwards carries the same asset
+        # handling (base64/file) as the Markdown. Direct callers keep the
+        # default True: their soup is left as they passed it.
+        restore_original_srcs = options.pop('restore_original_srcs', True)
         
         if isinstance(html, (BeautifulSoup, Tag, PageElement)):
             soup = html
@@ -696,13 +702,25 @@ class Scraper:
                     if new_src:
                         img_map[idx]['src'] = new_src
 
+        # 3. Apply --strip to the soup itself, before conversion.
+        # markdownify's strip drops the tag but keeps its children (i.e.
+        # unwrap semantics: link text survives strip=['a'], an <img> with
+        # no children vanishes). Unwrapping here keeps the soup — and any
+        # HTML captured from it afterwards — identical to the Markdown.
+        strip_tags = options.get('strip') or []
+        if isinstance(strip_tags, str):
+            strip_tags = [strip_tags]
+        for tag_name in strip_tags:
+            for el in soup.find_all(tag_name):
+                el.unwrap()
+
         # Default options for GFM-like output
         defaults = {
             'heading_style': 'ATX',
             'bullets': '-',
             'code_language_callback': lambda el: self._detect_code_language(el)
         }
-        
+
         # Merge with user options
         config = {**defaults, **options}
         # markdownify works best with strings to avoid redundant or broken re-parsing
@@ -718,15 +736,69 @@ class Scraper:
             for p_node, original_svg in preserved_svg_nodes:
                 p_node.replace_with(original_svg)
 
-        # Restore original image srcs in the soup
-        for img, src in original_srcs.items():
-            img['src'] = src
+        # Restore original image srcs in the soup, unless the caller asked
+        # to keep the processed ones (see restore_original_srcs above).
+        if restore_original_srcs:
+            for img, src in original_srcs.items():
+                img['src'] = src
 
         # Apply post-processing sanitization
         if options.get('sanitize', True):
             markdown = self.sanitizer.sanitize(markdown)
 
         return markdown
+
+    def to_html(self, html: Union[str, BeautifulSoup, Tag, PageElement], **options) -> str:
+        """
+        Converts HTML content to cleaned content HTML.
+
+        Runs the exact same pipeline as :meth:`to_markdown` (div code-block
+        detection, SVG/image handling, ``strip`` unwrapping) and returns the
+        processed HTML instead of Markdown, so the result is the
+        content-equivalent of what :meth:`to_markdown` would return for the
+        same input and options. The Markdown string itself is discarded;
+        only the processed soup is serialized.
+
+        Note: like :meth:`to_markdown`, this converts the HTML it is given
+        as-is — it does not extract the main content. Use :meth:`scrape`
+        for the full pipeline (fetch + main-content extraction + both
+        outputs).
+
+        Args:
+            html (Union[str, BeautifulSoup, Tag, PageElement]): The HTML content to convert.
+            **options: Same options as :meth:`to_markdown` (``svg_action``,
+                ``image_action``, ``assets_dir``, ``base_url``, ``strip``).
+
+        Returns:
+            str: The cleaned HTML string.
+        """
+        if isinstance(html, (BeautifulSoup, Tag, PageElement)):
+            soup = html
+        else:
+            soup = BeautifulSoup(html, 'lxml')
+
+        # Reuse to_markdown so both outputs share one pipeline; the
+        # processed soup is what we keep. restore_original_srcs=False
+        # keeps the asset handling (base64/file) in the returned HTML.
+        self.to_markdown(soup, restore_original_srcs=False, **options)
+        return str(soup)
+
+    def content_html(self, raw_html: str) -> str:
+        """
+        Best-effort content HTML for a raw document.
+
+        Runs main-content extraction only (boilerplate removal, no SVG /
+        image / ``strip`` processing) and serializes the result. Used as a
+        fallback when a scrape result from an older server has ``raw_html``
+        but no ``html`` key.
+
+        Args:
+            raw_html (str): The full HTML document.
+
+        Returns:
+            str: The extracted main content as an HTML string.
+        """
+        return str(self.extract_main_content(raw_html, as_soup=True))
 
     def extract_nav_links(self, html: Union[str, BeautifulSoup], base_url: str) -> list:
         """
@@ -847,9 +919,9 @@ class Scraper:
         **options
     ) -> dict:
         """
-        Orchestrates the full scraping flow: fetch, extract metadata, 
-        extract main content, and convert to Markdown.
-        
+        Orchestrates the full scraping flow: fetch, extract metadata,
+        extract main content, and convert to Markdown and HTML.
+
         Args:
             url (str): The URL of the webpage to scrape.
             dynamic (bool): Whether to use Playwright for dynamic rendering.
@@ -858,15 +930,19 @@ class Scraper:
             delay (float): Optional delay in seconds before request.
             retries (int): Optional max retries on request failure.
             **options: Additional options for Markdown conversion.
-            
+
         Returns:
-            dict: A dictionary containing 'url', 'metadata', 'markdown', 'raw_html', and 'nav_links'.
+            dict: A dictionary containing 'url', 'metadata', 'markdown',
+                'html', 'raw_html', and 'nav_links'. 'html' is the cleaned
+                main content as HTML — the content-equivalent of 'markdown'
+                (same extraction, same SVG/image/strip handling). 'raw_html'
+                is the complete fetched document, untouched.
         """
         if dynamic:
             html = self.fetch_html_dynamic(url, proxy=proxy, user_agent=user_agent, delay=delay)
         else:
             html = self.fetch_html(url, proxy=proxy, user_agent=user_agent, delay=delay, retries=retries)
-            
+
         # Parse once to avoid redundant parsing
         soup = BeautifulSoup(html, 'lxml')
 
@@ -874,18 +950,22 @@ class Scraper:
         metadata = self.extract_metadata(soup)
         nav_links = self.extract_nav_links(soup, url)
         internal_links = self.extract_links(soup, url)
-        
+
         # Destructive operation last (modifies soup)
         # Pass as_soup=True to avoid stringification and re-parsing in to_markdown
         main_soup = self.extract_main_content(soup, as_soup=True)
 
-        # Convert to markdown
-        markdown = self.to_markdown(main_soup, **options)
-        
+        # Convert to markdown. restore_original_srcs=False keeps the
+        # SVG/image processing applied to main_soup, so the HTML captured
+        # from it below is the exact content-equivalent of the markdown.
+        markdown = self.to_markdown(main_soup, restore_original_srcs=False, **options)
+        html_content = str(main_soup)
+
         return {
             'url': url,
             'metadata': metadata,
             'markdown': markdown,
+            'html': html_content,
             'raw_html': html,
             'nav_links': nav_links,
             'internal_links': internal_links

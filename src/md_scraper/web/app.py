@@ -7,7 +7,7 @@ import threading
 from concurrent.futures import ThreadPoolExecutor
 from flask import Flask, request, jsonify, render_template, send_file
 from md_scraper.scraper import Scraper
-from md_scraper.utils import get_title_from_result, sanitize_filename
+from md_scraper.utils import get_title_from_result, sanitize_filename, select_output
 from md_scraper.crawler import Crawler
 
 app = Flask(__name__)
@@ -169,18 +169,23 @@ def download_zip():
     if not results:
         return jsonify({'error': 'No results provided'}), 400
 
+    # Output format: 'markdown' (default), 'html' (cleaned main content
+    # as HTML) or 'html-raw' (full fetched document). Picks the matching
+    # content and file extension per result.
+    output_format = data.get('format', 'markdown')
+
     memory_file = io.BytesIO()
     used_filenames = set()
     with zipfile.ZipFile(memory_file, 'w', zipfile.ZIP_DEFLATED) as zf:
         for i, res in enumerate(results):
             url = res.get('url', 'unknown')
-            markdown = res.get('markdown', '')
+            content, extension = select_output(res, output_format)
             title = get_title_from_result(res, url)
-            filename = f"{title}.md"
+            filename = f"{title}{extension}"
             # Ensure unique filenames in ZIP
             if filename in used_filenames:
-                filename = f"{title}_{i}.md"
-            zf.writestr(filename, markdown)
+                filename = f"{title}_{i}{extension}"
+            zf.writestr(filename, content)
             used_filenames.add(filename)
     
     memory_file.seek(0)
@@ -196,7 +201,8 @@ def index():
     results = []
     error = None
     urls_input = ""
-    
+    output_format = 'markdown'
+
     if request.method == 'POST':
         urls_input = request.form.get('urls', '')
         dynamic = 'dynamic' in request.form
@@ -207,6 +213,12 @@ def index():
         depth = int(request.form.get('depth', 3))
         max_pages = int(request.form.get('max_pages', 10))
         only_subpaths = 'only_subpaths' in request.form
+        # Output format shown for the results: 'markdown' (default),
+        # 'html' (cleaned main content as HTML) or 'html-raw' (full
+        # fetched document). The scrape itself always returns all three.
+        output_format = request.form.get('format', 'markdown')
+        if output_format not in ('markdown', 'html', 'html-raw'):
+            output_format = 'markdown'
 
         target_urls = [u.strip() for u in urls_input.split('\n') if u.strip()]
         
@@ -233,10 +245,11 @@ def index():
             except Exception as e:
                 error = f"Scraper initialization error: {e}"
             
-    return render_template('index.html', 
-                           urls_input=urls_input, 
-                           results=results, 
-                           error=error)
+    return render_template('index.html',
+                           urls_input=urls_input,
+                           results=results,
+                           error=error,
+                           output_format=output_format)
 
 if __name__ == '__main__':
     host = os.environ.get('HOST', '127.0.0.1')

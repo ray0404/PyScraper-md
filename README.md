@@ -96,6 +96,27 @@ scraper scrape https://example.com/article -o article.md
 scraper scrape path/to/local/file.html -o output.md
 ```
 
+#### Output Formats (Markdown & HTML)
+
+By default the scraper outputs clean Markdown. Use `--format` to get HTML instead:
+
+```bash
+# Cleaned main content as HTML — the content-equivalent of the Markdown
+# output (same extraction, same SVG/image/strip handling), as an HTML fragment
+scraper scrape https://example.com/article --format html -o article.html
+
+# Full fetched document, untouched (includes nav, footer, scripts, etc.)
+scraper scrape https://example.com/article --format html-raw -o article-full.html
+```
+
+| Format | Description | File extension |
+|--------|-------------|----------------|
+| `markdown` (default) | Cleaned main content as GitHub Flavored Markdown. | `.md` |
+| `html` | Cleaned main content as HTML — same content as the Markdown output. | `.html` |
+| `html-raw` | The complete fetched HTML document, untouched. | `.html` |
+
+The same formats are available in the Python library (`result['html']` and `result['raw_html']`), the Web API (`/api/scrape` returns both keys; `/api/download-zip` accepts `"format"`), and the Web UI (Output Format dropdown).
+
 #### Asset Handling (Images & SVGs)
 
 Control how assets are processed:
@@ -207,6 +228,16 @@ result = scraper.scrape(
 # Access Data
 print(f"Title: {result['metadata']['title']}")
 print(f"Markdown:\n{result['markdown']}")
+
+# HTML outputs (same scrape, no extra request):
+# - 'html': cleaned main content as HTML, content-equivalent of 'markdown'
+# - 'raw_html': the complete fetched document, untouched
+print(f"HTML:\n{result['html']}")
+print(f"Raw HTML length: {len(result['raw_html'])}")
+
+# Convert an HTML fragment directly (no fetching, no main extraction):
+from md_scraper.scraper import Scraper
+html_fragment = Scraper().to_html("<h1>Title</h1><p>Text.</p>")
 ```
 
 ## 🐳 Docker Support

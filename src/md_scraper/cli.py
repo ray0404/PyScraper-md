@@ -4,10 +4,10 @@ import os
 import re
 import time
 from md_scraper.scraper import Scraper
-from md_scraper.utils import sanitize_filename, get_title_from_result
+from md_scraper.utils import sanitize_filename, get_title_from_result, select_output
 from md_scraper.crawler import Crawler
 
-def process_url_logic(url, server, dynamic, strip, svg_action, image_action, assets_dir, proxy=None, user_agent=None, delay=0.0, retries=3, scraper=None):
+def process_url_logic(url, server, dynamic, strip, svg_action, image_action, assets_dir, proxy=None, user_agent=None, delay=0.0, retries=3, scraper=None, output_format='markdown'):
     """Helper to process a single URL (local or remote). Returns result dict."""
     if server:
         # Remote scraping mode
@@ -21,7 +21,8 @@ def process_url_logic(url, server, dynamic, strip, svg_action, image_action, ass
             'proxy': proxy,
             'user_agent': user_agent,
             'delay': delay,
-            'retries': retries
+            'retries': retries,
+            'format': output_format
         }
         try:
             response = requests.post(api_url, json=payload)
@@ -77,9 +78,10 @@ def cli():
 @click.option('--user-agent', '-ua', help='Custom User-Agent header or "random" for rotating User-Agents.')
 @click.option('--delay', type=float, default=0.0, help='Delay in seconds between requests (default: 0.0).')
 @click.option('--retries', type=int, default=3, help='Max retry attempts on request failure (default: 3).')
-def scrape(urls, output, dynamic, strip, svg_action, image_action, assets_dir, server, crawl, depth, max_pages, only_subpaths, proxy, user_agent, delay, retries):
-    """Scrape URL(s) and print/save Markdown.
-    
+@click.option('--format', 'output_format', type=click.Choice(['markdown', 'html', 'html-raw']), default='markdown', show_default=True, help='Output format: markdown (default), html (cleaned main content as HTML, content-equivalent of the Markdown), or html-raw (full fetched HTML document).')
+def scrape(urls, output, dynamic, strip, svg_action, image_action, assets_dir, server, crawl, depth, max_pages, only_subpaths, proxy, user_agent, delay, retries, output_format):
+    """Scrape URL(s) and print/save content in the requested format.
+
     URLS can be web links or a path to a text file containing URLs.
     """
     
@@ -156,10 +158,11 @@ def scrape(urls, output, dynamic, strip, svg_action, image_action, assets_dir, s
 
                     result = process_url_logic(
                         current_url, server, dynamic, strip, svg_action, image_action, current_assets_dir,
-                        proxy=proxy, user_agent=user_agent, delay=delay, retries=retries, scraper=scraper
+                        proxy=proxy, user_agent=user_agent, delay=delay, retries=retries, scraper=scraper,
+                        output_format=output_format
                     )
-                    markdown = result.get('markdown', '')
-                    
+                    content, extension = select_output(result, output_format, scraper)
+
                     # Determine Output
                     if output:
                         # Save to directory with auto-name
@@ -170,16 +173,16 @@ def scrape(urls, output, dynamic, strip, svg_action, image_action, assets_dir, s
                             # Directory case
                             title = get_title_from_result(result, current_url)
                             # Sanitize more aggressively for filenames
-                            filename = f"{sanitize_filename(title)}.md"
+                            filename = f"{sanitize_filename(title)}{extension}"
                             file_path = os.path.join(output, filename)
-                        
+
                         with open(file_path, 'w') as f:
-                            f.write(markdown)
+                            f.write(content)
                         click.echo(f"  -> Saved: {file_path}")
                     else:
                         # Print to stdout
                         click.echo(f"\n--- URL: {current_url} ---\n")
-                        click.echo(markdown)
+                        click.echo(content)
                     
                     # Feed Crawler
                     if crawl and isinstance(iterator, Crawler):

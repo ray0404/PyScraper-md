@@ -76,6 +76,14 @@
                             <option value="base64" {% if image_action == 'base64' %}selected{% endif %}>Embed as Base64</option>
                         </select>
                     </label>
+
+                    <label for="format">Output Format:
+                        <select id="format" name="format">
+                            <option value="markdown" {% if output_format == 'markdown' %}selected{% endif %}>Markdown</option>
+                            <option value="html" {% if output_format == 'html' %}selected{% endif %}>HTML (main content)</option>
+                            <option value="html-raw" {% if output_format == 'html-raw' %}selected{% endif %}>HTML (full document)</option>
+                        </select>
+                    </label>
                 </div>
 
                 <button type="submit">Scrape All</button>
@@ -141,8 +149,8 @@
                         <strong>Author:</strong> {{ res.metadata.author or 'N/A' }}<br>
                         <strong>URL:</strong> <a href="{{ res.url }}" target="_blank">{{ res.url }}</a>
                     </div>
-                    <textarea id="markdown-{{ loop.index0 }}" readonly>{{ res.markdown }}</textarea>
-                    <button class="secondary" onclick="copyToClipboard('markdown-{{ loop.index0 }}')">Copy Markdown</button>
+                    <textarea id="output-{{ loop.index0 }}" readonly>{% if output_format == 'html' %}{{ res.html or '' }}{% elif output_format == 'html-raw' %}{{ res.raw_html or '' }}{% else %}{{ res.markdown }}{% endif %}</textarea>
+                    <button class="secondary" onclick="copyToClipboard('output-{{ loop.index0 }}')">Copy Output</button>
                 </div>
                 {% endfor %}
             </section>
@@ -162,14 +170,14 @@
                     const textarea = document.getElementById(id);
                     textarea.select();
                     document.execCommand('copy');
-                    alert('Markdown copied to clipboard!');
+                    alert('Output copied to clipboard!');
                 }
 
                 async function downloadAllZip() {
-                    const response = await fetch('/api/download_zip', {
+                    const response = await fetch('/api/download-zip', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ results: resultsData })
+                        body: JSON.stringify({ results: resultsData, format: '{{ output_format or 'markdown' }}' })
                     });
                     if (response.ok) {
                         const blob = await response.blob();
