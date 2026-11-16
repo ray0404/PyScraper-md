@@ -562,8 +562,8 @@ def test_cli_format_html_document():
 
 
 def test_cli_banner_kept_for_other_formats():
-    # The banner is a multi-URL delimiter for the other formats; only
-    # html-document drops it.
+    # The banner is a multi-URL delimiter for the fragment formats; the
+    # full-document formats drop it by default.
     result, _ = _run_cli(['scrape', 'https://example.com'])
     assert result.exit_code == 0
     assert '--- URL: https://example.com ---' in result.output
@@ -572,7 +572,65 @@ def test_cli_banner_kept_for_other_formats():
     assert '--- URL: https://example.com ---' in result.output
     result, _ = _run_cli(['scrape', 'https://example.com', '--format', 'html-raw'])
     assert result.exit_code == 0
+    assert '--- URL:' not in result.stdout
+    assert result.stdout.startswith('<html>')
+
+
+def test_cli_banner_stdout_forces_banner_for_documents():
+    # --banner stdout: the banner is printed on stdout even for the
+    # full-document formats (explicit override of the default suppression).
+    result, _ = _run_cli(['--banner', 'stdout', 'scrape', 'https://example.com',
+                          '--format', 'html-document'])
+    assert result.exit_code == 0
+    assert '--- URL: https://example.com ---' in result.stdout
+    result, _ = _run_cli(['--banner', 'stdout', 'scrape', 'https://example.com',
+                          '--format', 'html-raw'])
+    assert result.exit_code == 0
+    assert '--- URL: https://example.com ---' in result.stdout
+
+
+def test_cli_banner_stderr_moves_banner():
+    # --banner stderr: the banner leaves stdout entirely (mixed output
+    # still shows it, via stderr) for every format.
+    result, _ = _run_cli(['--banner', 'stderr', 'scrape', 'https://example.com'])
+    assert result.exit_code == 0
+    assert '--- URL:' not in result.stdout
     assert '--- URL: https://example.com ---' in result.output
+    result, _ = _run_cli(['--banner', 'stderr', 'scrape', 'https://example.com',
+                          '--format', 'html-document'])
+    assert result.exit_code == 0
+    assert '--- URL:' not in result.stdout
+    assert result.stdout.startswith('<!DOCTYPE html>')
+    assert '--- URL: https://example.com ---' in result.output
+
+
+def test_cli_banner_none_strips_banner():
+    # --banner none: no banner anywhere, for any format.
+    result, _ = _run_cli(['--banner', 'none', 'scrape', 'https://example.com'])
+    assert result.exit_code == 0
+    assert '--- URL:' not in result.output
+    result, _ = _run_cli(['--banner', 'none', 'scrape', 'https://example.com',
+                          '--format', 'html-document'])
+    assert result.exit_code == 0
+    assert '--- URL:' not in result.output
+
+
+def test_cli_banner_invalid_value_rejected():
+    result, _ = _run_cli(['--banner', 'bogus', 'scrape', 'https://example.com'])
+    assert result.exit_code != 0
+    assert 'Invalid value' in result.output
+
+
+def test_cli_banner_default_mode_is_explicit_stdout():
+    # --banner default behaves like the default: banner on stdout for
+    # fragments, suppressed for documents.
+    result, _ = _run_cli(['--banner', 'default', 'scrape', 'https://example.com'])
+    assert result.exit_code == 0
+    assert '--- URL: https://example.com ---' in result.stdout
+    result, _ = _run_cli(['--banner', 'default', 'scrape', 'https://example.com',
+                          '--format', 'html-raw'])
+    assert result.exit_code == 0
+    assert '--- URL:' not in result.stdout
 
 
 def test_cli_format_html_document_output_file(tmp_path):

@@ -57,9 +57,39 @@ def process_url_logic(url, server, dynamic, strip, svg_action, image_action, ass
             with scraper_cm as temp_scraper:
                 return temp_scraper.scrape(url, dynamic=dynamic, **scrape_options)
 
+# Banner modes for the global --banner option (see cli() below).
+BANNER_MODES = ('default', 'stdout', 'stderr', 'none')
+
+
+def _banner_target(banner_mode, output_format):
+    """Decide where the '--- URL: ---' banner goes: 'stdout', 'stderr' or None.
+
+    default: current behavior — on stdout, except suppressed for the two
+        full-document formats (html-document, html-raw) so their output
+        starts with the DOCTYPE instead of a plain-text banner.
+    stdout: always on stdout, even for the document formats.
+    stderr: always on stderr, keeping stdout clean for every format.
+    none: never printed.
+    """
+    if banner_mode == 'none':
+        return None
+    if banner_mode == 'stdout':
+        return 'stdout'
+    if banner_mode == 'stderr':
+        return 'stderr'
+    # default
+    if output_format in ('html-document', 'html-raw'):
+        return None
+    return 'stdout'
+
+
 @click.group()
-def cli():
-    pass
+@click.option('--banner', type=click.Choice(BANNER_MODES), default='default', show_default=True,
+              help='Where to print the "--- URL: ---" banner: default (current behavior — on stdout, except suppressed for html-document and html-raw so the output starts with the DOCTYPE), stdout (always on stdout), stderr (always on stderr, keeping stdout clean), or none (never printed).')
+@click.pass_context
+def cli(ctx, banner):
+    # Global option: stored on the context for subcommands to read.
+    ctx.obj = {'banner': banner}
 
 @cli.command()
 @click.argument('urls', nargs=-1)
@@ -79,11 +109,19 @@ def cli():
 @click.option('--delay', type=float, default=0.0, help='Delay in seconds between requests (default: 0.0).')
 @click.option('--retries', type=int, default=3, help='Max retry attempts on request failure (default: 3).')
 @click.option('--format', 'output_format', type=click.Choice(['markdown', 'html', 'html-document', 'html-raw']), default='markdown', show_default=True, help='Output format: markdown (default), html (cleaned main content as HTML, content-equivalent of the Markdown), html-document (that content wrapped in a complete standalone HTML document, ready to open in a browser), or html-raw (full fetched HTML document).')
-def scrape(urls, output, dynamic, strip, svg_action, image_action, assets_dir, server, crawl, depth, max_pages, only_subpaths, proxy, user_agent, delay, retries, output_format):
+@click.pass_context
+def scrape(ctx, urls, output, dynamic, strip, svg_action, image_action, assets_dir, server, crawl, depth, max_pages, only_subpaths, proxy, user_agent, delay, retries, output_format):
     """Scrape URL(s) and print/save content in the requested format.
 
     URLS can be web links or a path to a text file containing URLs.
+
+    The '--- URL: ---' banner printed before each result is controlled by
+    the global --banner option (see `scraper --help`): it goes before the
+    subcommand, e.g. `scraper --banner stderr scrape URL`.
     """
+    # Banner placement for this run, from the global --banner option.
+    banner_mode = (ctx.obj or {}).get('banner', 'default')
+    banner_target = _banner_target(banner_mode, output_format)
     
     initial_target_urls = []
     
@@ -180,13 +218,15 @@ def scrape(urls, output, dynamic, strip, svg_action, image_action, assets_dir, s
                             f.write(content)
                         click.echo(f"  -> Saved: {file_path}")
                     else:
-                        # Print to stdout. For html-document the banner is
-                        # omitted: anything before the DOCTYPE would put the
-                        # browser in quirks mode, and the document already
-                        # carries its source URL as a visible element (and
-                        # in <base href> / the canonical link).
-                        if output_format != 'html-document':
+                        # Print to stdout. The banner goes where the global
+                        # --banner option says: with the default it is
+                        # omitted for the full-document formats so the
+                        # output starts with the DOCTYPE (a banner before
+                        # it would put the browser in quirks mode).
+                        if banner_target == 'stdout':
                             click.echo(f"\n--- URL: {current_url} ---\n")
+                        elif banner_target == 'stderr':
+                            click.echo(f"\n--- URL: {current_url} ---\n", err=True)
                         click.echo(content)
                     
                     # Feed Crawler

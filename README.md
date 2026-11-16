@@ -123,6 +123,23 @@ scraper scrape https://example.com/article --format html-document -o article.htm
 
 The same formats are available in the Python library (`result['html']`, `result['html_document']` and `result['raw_html']`), the Web API (`/api/scrape` returns all keys; `/api/download-zip` accepts `"format"`), and the Web UI (Output Format dropdown).
 
+#### The `--- URL: ---` Banner
+
+When printing to stdout, the CLI prints a `--- URL: ... ---` banner before each result as a multi-URL delimiter. The global `--banner` option (before the subcommand) controls where it goes:
+
+```bash
+scraper --banner stderr scrape https://example.com/article   # banner on stderr, stdout stays clean
+scraper --banner none scrape https://example.com/article     # no banner at all
+scraper --banner stdout scrape https://example.com/article --format html-raw  # banner on stdout even for documents
+```
+
+| Value | Behavior |
+|-------|----------|
+| `default` | Current behavior: banner on stdout, except suppressed for `html-document` and `html-raw` so the output starts with the DOCTYPE. |
+| `stdout` | Always on stdout, including for the document formats. |
+| `stderr` | Always on stderr, keeping stdout clean for every format. |
+| `none` | Never printed. |
+
 #### Asset Handling (Images & SVGs)
 
 Control how assets are processed:
