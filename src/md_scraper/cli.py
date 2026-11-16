@@ -180,8 +180,13 @@ def scrape(urls, output, dynamic, strip, svg_action, image_action, assets_dir, s
                             f.write(content)
                         click.echo(f"  -> Saved: {file_path}")
                     else:
-                        # Print to stdout
-                        click.echo(f"\n--- URL: {current_url} ---\n")
+                        # Print to stdout. For html-document the banner is
+                        # omitted: anything before the DOCTYPE would put the
+                        # browser in quirks mode, and the document already
+                        # carries its source URL as a visible element (and
+                        # in <base href> / the canonical link).
+                        if output_format != 'html-document':
+                            click.echo(f"\n--- URL: {current_url} ---\n")
                         click.echo(content)
                     
                     # Feed Crawler

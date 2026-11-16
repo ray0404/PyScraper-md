@@ -399,8 +399,13 @@ def test_wrap_html_document_structure():
     assert '<base href="https://example.com/article">' in doc
     assert '<link rel="canonical" href="https://example.com/article">' in doc
     assert '<style>' in doc and 'max-width: 800px' in doc
+    assert '.scraped-source' in doc
     assert '<main><h1>Title</h1><p>Text.</p></main>' in doc
     assert '<!-- Scraped from https://example.com/article by md-scraper -->' in doc
+    # The source URL is a visible, proper HTML element at the top of the body.
+    assert ('<p class="scraped-source">Source: '
+            '<a href="https://example.com/article">https://example.com/article</a></p>') in doc
+    assert doc.index('scraped-source') < doc.index('<main>')
     assert doc.rstrip().endswith('</html>')
     # Exactly one body element, and the content sits inside it.
     assert doc.count('<body>') == 1 and doc.count('</body>') == 1
@@ -424,6 +429,21 @@ def test_wrap_html_document_no_base_for_local_source():
                                      source_url='/tmp/page.html')
     assert '<base' not in doc
     assert 'rel="canonical"' not in doc
+
+
+def test_wrap_html_document_source_line_local_source():
+    # Local (non-URL) sources get a plain-text source line, no link.
+    doc = Scraper.wrap_html_document('<p>x</p>', title='Local',
+                                     source_url='/tmp/a&b.html')
+    assert '<p class="scraped-source">Source: /tmp/a&amp;b.html</p>' in doc
+    assert '<a href' not in doc
+
+
+def test_wrap_html_document_no_source_line_without_url():
+    doc = Scraper.wrap_html_document('<p>x</p>', title='T')
+    # No source element is rendered (the stylesheet still defines the class).
+    assert '<p class="scraped-source">' not in doc
+    assert 'Source:' not in BeautifulSoup(doc, 'lxml').body.get_text()
 
 
 def test_wrap_html_document_include_base_false():
@@ -460,6 +480,9 @@ def test_scrape_returns_html_document():
     assert doc.startswith('<!DOCTYPE html>')
     assert '<title>Sample Blog Post</title>' in doc
     assert '<base href="https://example.com/blog/sample">' in doc
+    assert ('<p class="scraped-source">Source: '
+            '<a href="https://example.com/blog/sample">'
+            'https://example.com/blog/sample</a></p>') in doc
     assert '<main>' in doc
     assert 'Sample Blog Post' in doc
     assert 'Home' not in doc
@@ -529,9 +552,27 @@ def test_cli_format_html_document():
     result, _ = _run_cli(['scrape', 'https://example.com',
                           '--format', 'html-document'])
     assert result.exit_code == 0
-    assert '<!DOCTYPE html>' in result.output
+    # No "--- URL: ---" banner: stdout is the document itself, starting
+    # with the DOCTYPE (a banner before it would trigger quirks mode).
+    # (The "[1] Scraping ..." progress line goes to stderr, so stdout is clean.)
+    assert '--- URL:' not in result.stdout
+    assert result.stdout.startswith('<!DOCTYPE html>')
     assert '<title>Test</title>' in result.output
     assert '<main><h1>Mocked Markdown</h1></main>' in result.output
+
+
+def test_cli_banner_kept_for_other_formats():
+    # The banner is a multi-URL delimiter for the other formats; only
+    # html-document drops it.
+    result, _ = _run_cli(['scrape', 'https://example.com'])
+    assert result.exit_code == 0
+    assert '--- URL: https://example.com ---' in result.output
+    result, _ = _run_cli(['scrape', 'https://example.com', '--format', 'html'])
+    assert result.exit_code == 0
+    assert '--- URL: https://example.com ---' in result.output
+    result, _ = _run_cli(['scrape', 'https://example.com', '--format', 'html-raw'])
+    assert result.exit_code == 0
+    assert '--- URL: https://example.com ---' in result.output
 
 
 def test_cli_format_html_document_output_file(tmp_path):
@@ -563,8 +604,11 @@ def test_cli_format_html_document_on_local_file(tmp_path):
     result = runner.invoke(cli, ['scrape', str(page),
                                   '--format', 'html-document'])
     assert result.exit_code == 0
-    assert '<!DOCTYPE html>' in result.output
+    assert '--- URL:' not in result.stdout
+    assert result.stdout.startswith('<!DOCTYPE html>')
     assert '<title>Local</title>' in result.output
+    # Local sources get a plain-text source line with the file path.
+    assert f'<p class="scraped-source">Source: {page}</p>' in result.output
     assert '<main>' in result.output
     assert 'Nav' not in result.output
 

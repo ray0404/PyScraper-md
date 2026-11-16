@@ -27,6 +27,7 @@ h1 { font-size: 2rem; border-bottom: 1px solid #ddd; padding-bottom: 0.3em; }
 h2 { font-size: 1.5rem; border-bottom: 1px solid #eee; padding-bottom: 0.3em; }
 a { color: #0969da; }
 a:visited { color: #8250df; }
+.scraped-source { font-size: 0.85em; color: #666; border-bottom: 1px solid #eee; padding-bottom: 0.5em; margin: 0 0 1.5em; }
 img, svg, video { max-width: 100%; height: auto; }
 pre { background: #f6f8fa; border: 1px solid #ddd; border-radius: 6px; padding: 1rem; overflow-x: auto; }
 code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.875em; }
@@ -46,6 +47,7 @@ hr { border: none; border-top: 1px solid #ddd; margin: 2em 0; }
   pre, p code, li code, td code, th { background: #161b22; }
   pre, th, td, blockquote { border-color: #333; }
   blockquote { color: #aaa; }
+  .scraped-source { color: #aaa; border-bottom-color: #222; }
 }
 """
 
@@ -849,6 +851,10 @@ class Scraper:
         renders fully offline). When the source is an http(s) URL, a
         ``<base href>`` and canonical link are added so relative links and
         images in the content keep resolving against the original page.
+        The source URL is also shown at the top of the page as a visible
+        ``<p class="scraped-source">`` element linking back to the original
+        (plain text for non-URL sources), so the document itself carries
+        where it came from.
 
         Args:
             content_html (str): The content HTML to wrap (e.g. the ``html``
@@ -917,10 +923,25 @@ class Scraper:
 
         head = '\n'.join(head_lines)
         source_comment = ''
+        source_line = ''
         if source_url:
+            escaped_url = html_lib.escape(source_url)
             source_comment = (
-                f'<!-- Scraped from {html_lib.escape(source_url)} by md-scraper -->\n'
+                f'<!-- Scraped from {escaped_url} by md-scraper -->\n'
             )
+            # Visible source attribution at the top of the page, carrying
+            # the URL in a proper HTML element instead of a plain-text
+            # banner outside the document.
+            if is_http:
+                source_line = (
+                    '<p class="scraped-source">Source: '
+                    f'<a href="{html_lib.escape(source_url, quote=True)}">'
+                    f'{escaped_url}</a></p>\n'
+                )
+            else:
+                source_line = (
+                    f'<p class="scraped-source">Source: {escaped_url}</p>\n'
+                )
         return (
             '<!DOCTYPE html>\n'
             '<html lang="en">\n'
@@ -929,6 +950,7 @@ class Scraper:
             '</head>\n'
             '<body>\n'
             f'{source_comment}'
+            f'{source_line}'
             f'{text}\n'
             '</body>\n'
             '</html>\n'

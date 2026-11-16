@@ -118,7 +118,7 @@ scraper scrape https://example.com/article --format html-document -o article.htm
 |--------|-------------|----------------|
 | `markdown` (default) | Cleaned main content as GitHub Flavored Markdown. | `.md` |
 | `html` | Cleaned main content as HTML — same content as the Markdown output. | `.html` |
-| `html-document` | That same content wrapped in a complete standalone HTML document: DOCTYPE, `<html lang="en">`, UTF-8 charset, viewport, title, `<base href>` + canonical link (for http(s) sources, so relative links/images keep working), and an inline stylesheet — no external requests, renders fully offline. Already-wrapped input is returned unchanged. | `.html` |
+| `html-document` | That same content wrapped in a complete standalone HTML document: DOCTYPE, `<html lang="en">`, UTF-8 charset, viewport, title, `<base href>` + canonical link (for http(s) sources, so relative links/images keep working), a visible `Source:` link at the top of the page, and an inline stylesheet — no external requests, renders fully offline. Already-wrapped input is returned unchanged. When printed to stdout, the CLI omits its `--- URL: ---` banner for this format so the output starts with the DOCTYPE (a banner before it would trigger quirks mode). | `.html` |
 | `html-raw` | The complete fetched HTML document, untouched. | `.html` |
 
 The same formats are available in the Python library (`result['html']`, `result['html_document']` and `result['raw_html']`), the Web API (`/api/scrape` returns all keys; `/api/download-zip` accepts `"format"`), and the Web UI (Output Format dropdown).
