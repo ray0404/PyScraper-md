@@ -85,6 +85,13 @@
                             <option value="html-raw" {% if output_format == 'html-raw' %}selected{% endif %}>HTML (full document)</option>
                         </select>
                     </label>
+
+                    <label for="engine">Engine:
+                        <select id="engine" name="engine">
+                            <option value="python" {% if engine == 'python' %}selected{% endif %}>Python</option>
+                            <option value="ts" {% if engine == 'ts' %}selected{% endif %}>TypeScript</option>
+                        </select>
+                    </label>
                 </div>
 
                 <button type="submit">Scrape All</button>

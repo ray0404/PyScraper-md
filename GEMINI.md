@@ -12,6 +12,7 @@
 *   **Modes:** CLI, Web UI (Flask), and Python Library.
 *   **Dynamic Support:** Handles JS-heavy sites via Playwright.
 *   **Remote Offloading:** Can delegate scraping to a remote server (Cloud Run), useful for restricted environments like Termux.
+*   **TypeScript Engine:** A faithful port of the Python engine lives in `typescript/` (`pyscraper-md-ts`): same pipeline, result shape, and outputs (static + dynamic, crawling, local-file/MHT input, `file` assets, proxy/UA/delay/retries, all four formats), verified byte-identical against Python in `typescript/tests/side-by-side.test.ts`. Usable as a Bun/Node CLI and library, and from Python via `--engine ts` (CLI), `engine: "ts"` (`/api/scrape`, `/api/download-zip`, web UI dropdown), bridged by `src/md_scraper/ts_engine.py` through the TS CLI's `--json` machine mode. See `typescript/README.md`.
 
 ## Performance & Features (v0.2.x)
 
@@ -30,8 +31,10 @@
 The project follows a modular structure managed by **Poetry**.
 
 *   **`src/md_scraper/scraper.py`**: The core `Scraper` class containing all extraction logic (`fetch_html`, `fetch_html_dynamic`, `to_markdown`, `to_html`, `content_html`, `wrap_html_document`). `scrape()` returns `markdown`, `html` (content-equivalent HTML), `html_document` (standalone browser-ready document), and `raw_html` (full document).
-*   **`src/md_scraper/cli.py`**: The CLI entry point using `Click`. Defines commands like `scrape`.
-*   **`src/md_scraper/web/app.py`**: The Flask application for the Web UI and API endpoints.
+*   **`src/md_scraper/cli.py`**: The CLI entry point using `Click`. Defines commands like `scrape`. `--engine python|ts` (default `python`) selects the engine; with `--server` the choice is sent to the server.
+*   **`src/md_scraper/web/app.py`**: The Flask application for the Web UI and API endpoints. `/api/scrape` and `/api/download-zip` accept `engine: "python" | "ts"` (default `"python"`); the web UI has an Engine dropdown.
+*   **`src/md_scraper/ts_engine.py`**: Bridge to the TypeScript engine — locates the TS CLI (`PYSCRAPER_TS_CMD` env override, else `bun run typescript/src/cli.ts`, else `node typescript/dist/cli.js`) and runs it via its `--json` mode (`scrape_ts` / `crawl_ts` / `wrap_ts` / `content_html_ts`).
+*   **`typescript/`**: The TypeScript port (`pyscraper-md-ts`). `src/scraper.ts` (Scraper/Crawler, fetch, extraction), `src/html.ts` (hand-rolled tolerant HTML parser + serializer), `src/markdown.ts` (markdownify-compatible converter), `src/sanitizer.ts`, `src/cli.ts` (CLI + `--json` machine mode), `src/index.ts` (library entry). Dependency-free except optional `playwright` for dynamic mode. Tests in `typescript/tests/` (`bun test`), including a TS-vs-Python side-by-side suite.
 *   **`scraper-go.sh`**: An interactive Bash script for batch processing and user-friendly CLI interaction.
 *   **`Dockerfile`**: Docker configuration for deploying the Flask app (with Playwright support) to Google Cloud Run.
 *   **`pyproject.toml`**: Dependency management and build configuration.
@@ -97,6 +100,32 @@ docker run -p 8080:8080 --name scraper_container scraper
 ```
 > **Note:** Ensure port 8080 is free. If not, map to another port (e.g., `-p 8081:8080`) or kill the process occupying it.
 
+### 4. TypeScript Engine
+```bash
+cd typescript
+
+# Bun (no build step) — primary
+bun run src/cli.ts scrape https://example.com
+bun run src/cli.ts scrape http://quotes.toscrape.com/js/ --dynamic
+
+# Node (build first)
+npm install && npm run build
+node dist/cli.js scrape https://example.com
+
+# From Python instead of the Python engine
+PYTHONPATH=src python -m md_scraper.cli scrape https://example.com --engine ts
+# (or, once installed: scraper scrape https://example.com --engine ts)
+
+# From the web app: POST /api/scrape with {"engine": "ts"}, or pick
+# "TypeScript" in the web UI's Engine dropdown.
+```
+Dynamic scraping needs Playwright + Chromium (`bun install` pulls the
+optional `playwright` dep); the browser path comes from `CHROMIUM_PATH`
+when set, the proxy from `--proxy` / `PYSCRAPER_PROXY` env, and
+`ignore_https_errors` is a per-scrape option (default `false`). On a
+VM where Chromium can only reach loopback, point the proxy at a
+loopback relay, e.g. `PYSCRAPER_PROXY=http://127.0.0.1:8891`.
+
 ## Testing
 
 The project uses `pytest` for unit and integration testing.
@@ -107,6 +136,9 @@ poetry run pytest
 
 # Run with coverage report
 poetry run pytest --cov=md_scraper
+
+# TypeScript engine tests (Bun) — includes the TS-vs-Python side-by-side suite
+cd typescript && bun test
 ```
 **Conventions:**
 *   Unit tests mock network and browser calls.

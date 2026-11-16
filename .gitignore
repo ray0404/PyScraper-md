@@ -186,3 +186,6 @@ repomix_PyScraper.md
 GEMINI_addendum.md
 md-scraper.skill
 /repo*
+
+# Node / Bun
+node_modules/

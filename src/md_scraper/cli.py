@@ -4,10 +4,11 @@ import os
 import re
 import time
 from md_scraper.scraper import Scraper
+from md_scraper.ts_engine import scrape_ts
 from md_scraper.utils import sanitize_filename, get_title_from_result, select_output
 from md_scraper.crawler import Crawler
 
-def process_url_logic(url, server, dynamic, strip, svg_action, image_action, assets_dir, proxy=None, user_agent=None, delay=0.0, retries=3, scraper=None, output_format='markdown'):
+def process_url_logic(url, server, dynamic, strip, svg_action, image_action, assets_dir, proxy=None, user_agent=None, delay=0.0, retries=3, scraper=None, output_format='markdown', engine='python'):
     """Helper to process a single URL (local or remote). Returns result dict."""
     if server:
         # Remote scraping mode
@@ -22,7 +23,8 @@ def process_url_logic(url, server, dynamic, strip, svg_action, image_action, ass
             'user_agent': user_agent,
             'delay': delay,
             'retries': retries,
-            'format': output_format
+            'format': output_format,
+            'engine': engine,
         }
         try:
             response = requests.post(api_url, json=payload)
@@ -34,6 +36,22 @@ def process_url_logic(url, server, dynamic, strip, svg_action, image_action, ass
             raise Exception(f"Connection error: {e}")
     else:
         # Local scraping mode
+        if engine == 'ts':
+            # Run the TypeScript engine via its --json CLI mode; the
+            # result shape is identical to the Python engine's, so the
+            # caller's output handling works unchanged.
+            return scrape_ts(
+                url,
+                dynamic=dynamic,
+                svg_action=svg_action,
+                image_action=image_action,
+                assets_dir=assets_dir,
+                strip_tags=list(strip) if strip else [],
+                proxy=proxy,
+                user_agent=user_agent,
+                delay=delay,
+                retries=retries,
+            )
         scrape_options = {
             'svg_action': svg_action,
             'image_action': image_action,
@@ -109,8 +127,9 @@ def cli(ctx, banner):
 @click.option('--delay', type=float, default=0.0, help='Delay in seconds between requests (default: 0.0).')
 @click.option('--retries', type=int, default=3, help='Max retry attempts on request failure (default: 3).')
 @click.option('--format', 'output_format', type=click.Choice(['markdown', 'html', 'html-document', 'html-raw']), default='markdown', show_default=True, help='Output format: markdown (default), html (cleaned main content as HTML, content-equivalent of the Markdown), html-document (that content wrapped in a complete standalone HTML document, ready to open in a browser), or html-raw (full fetched HTML document).')
+@click.option('--engine', type=click.Choice(['python', 'ts']), default='python', show_default=True, help='Scraper engine: python (default) or ts (TypeScript engine in typescript/, run via its --json CLI mode). With --server, the engine choice is sent to the server.')
 @click.pass_context
-def scrape(ctx, urls, output, dynamic, strip, svg_action, image_action, assets_dir, server, crawl, depth, max_pages, only_subpaths, proxy, user_agent, delay, retries, output_format):
+def scrape(ctx, urls, output, dynamic, strip, svg_action, image_action, assets_dir, server, crawl, depth, max_pages, only_subpaths, proxy, user_agent, delay, retries, output_format, engine):
     """Scrape URL(s) and print/save content in the requested format.
 
     URLS can be web links or a path to a text file containing URLs.
@@ -167,7 +186,9 @@ def scrape(ctx, urls, output, dynamic, strip, svg_action, image_action, assets_d
     try:
         # We use a context manager to reuse the Scraper instance across multiple URLs if local
         from contextlib import nullcontext
-        if server:
+        if server or engine == 'ts':
+            # No Python Scraper needed: remote mode, or the TS engine
+            # (process_url_logic shells out to it per URL).
             scraper_cm = nullcontext()
         else:
             try:
@@ -197,7 +218,7 @@ def scrape(ctx, urls, output, dynamic, strip, svg_action, image_action, assets_d
                     result = process_url_logic(
                         current_url, server, dynamic, strip, svg_action, image_action, current_assets_dir,
                         proxy=proxy, user_agent=user_agent, delay=delay, retries=retries, scraper=scraper,
-                        output_format=output_format
+                        output_format=output_format, engine=engine
                     )
                     content, extension = select_output(result, output_format, scraper)
 

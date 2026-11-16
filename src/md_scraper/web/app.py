@@ -7,12 +7,13 @@ import threading
 from concurrent.futures import ThreadPoolExecutor
 from flask import Flask, request, jsonify, render_template, send_file
 from md_scraper.scraper import Scraper
+from md_scraper.ts_engine import scrape_ts, wrap_ts, content_html_ts
 from md_scraper.utils import get_title_from_result, sanitize_filename, select_output
 from md_scraper.crawler import Crawler
 
 app = Flask(__name__)
 
-def process_crawling(iterator, crawl, dynamic, svg_action, image_action, strip_tags, proxy=None, user_agent=None, delay=0.0, retries=3):
+def process_crawling(iterator, crawl, dynamic, svg_action, image_action, strip_tags, proxy=None, user_agent=None, delay=0.0, retries=3, engine="python"):
     # Determine the start URL and whether it's a batch
     # We will just manage a thread pool and a task queue
     # `iterator` is either `Crawler` or `zip`.
@@ -54,24 +55,38 @@ def process_crawling(iterator, crawl, dynamic, svg_action, image_action, strip_t
 
             url, depth = item
             try:
-                try:
-                    scraper_cm = Scraper(proxy=proxy, user_agent=user_agent, delay=delay, retries=retries)
-                except TypeError:
-                    scraper_cm = Scraper()
-
-                with scraper_cm as scraper:
-                    res = scraper.scrape(
+                if engine == "ts":
+                    res = scrape_ts(
                         url,
                         dynamic=dynamic,
                         svg_action=svg_action,
                         image_action=image_action,
-                        strip=strip_tags,
+                        strip_tags=strip_tags,
                         proxy=proxy,
                         user_agent=user_agent,
                         delay=delay,
-                        retries=retries
+                        retries=retries,
                     )
                     result_queue.put((res, depth, None))
+                else:
+                    try:
+                        scraper_cm = Scraper(proxy=proxy, user_agent=user_agent, delay=delay, retries=retries)
+                    except TypeError:
+                        scraper_cm = Scraper()
+
+                    with scraper_cm as scraper:
+                        res = scraper.scrape(
+                            url,
+                            dynamic=dynamic,
+                            svg_action=svg_action,
+                            image_action=image_action,
+                            strip=strip_tags,
+                            proxy=proxy,
+                            user_agent=user_agent,
+                            delay=delay,
+                            retries=retries
+                        )
+                        result_queue.put((res, depth, None))
             except Exception as e:
                 result_queue.put((None, depth, e))
             finally:
@@ -142,6 +157,11 @@ def api_scrape():
     user_agent = data.get('user_agent')
     delay = float(data.get('delay', 0.0))
     retries = int(data.get('retries', 3))
+    # Which engine runs the scrape: "python" (default) or "ts"
+    # (TypeScript engine in typescript/, via its --json CLI mode).
+    engine = data.get('engine', 'python')
+    if engine not in ('python', 'ts'):
+        return jsonify({'error': "engine must be 'python' or 'ts'"}), 400
 
     try:
         if crawl:
@@ -151,7 +171,8 @@ def api_scrape():
              
         results = process_crawling(
             iterator, crawl, dynamic, svg_action, image_action, strip_tags,
-            proxy=proxy, user_agent=user_agent, delay=delay, retries=retries
+            proxy=proxy, user_agent=user_agent, delay=delay, retries=retries,
+            engine=engine
         )
         
         if crawl:
@@ -174,6 +195,21 @@ def download_zip():
     # standalone HTML document) or 'html-raw' (full fetched document).
     # Picks the matching content and file extension per result.
     output_format = data.get('format', 'markdown')
+    # When the caller used the TS engine, results may lack 'html' /
+    # 'html_document' (e.g. older clients that only stored markdown).
+    # Rebuild the missing pieces with the TS engine instead of Python.
+    engine = data.get('engine', 'python')
+    if engine == 'ts':
+        for res in results:
+            if output_format in ('html', 'html-document') and not res.get('html'):
+                res['html'] = content_html_ts(res.get('raw_html', ''))
+            if output_format == 'html-document' and not res.get('html_document'):
+                res['html_document'] = wrap_ts(
+                    res.get('html', ''),
+                    title=res.get('metadata', {}).get('title'),
+                    source_url=res.get('url'),
+                    metadata=res.get('metadata', {}),
+                )
 
     memory_file = io.BytesIO()
     used_filenames = set()
@@ -222,6 +258,9 @@ def index():
         output_format = request.form.get('format', 'markdown')
         if output_format not in ('markdown', 'html', 'html-document', 'html-raw'):
             output_format = 'markdown'
+        engine = request.form.get('engine', 'python')
+        if engine not in ('python', 'ts'):
+            engine = 'python'
 
         target_urls = [u.strip() for u in urls_input.split('\n') if u.strip()]
         
@@ -239,7 +278,7 @@ def index():
                         else:
                             iterator = zip([url], [0])
                             
-                        batch_results = process_crawling(iterator, crawl, dynamic, svg_action, image_action, strip_tags)
+                        batch_results = process_crawling(iterator, crawl, dynamic, svg_action, image_action, strip_tags, engine=engine)
                         results.extend(batch_results)
 
                     except Exception as e:
@@ -252,7 +291,8 @@ def index():
                            urls_input=urls_input,
                            results=results,
                            error=error,
-                           output_format=output_format)
+                           output_format=output_format,
+                           engine=engine if request.method == 'POST' else 'python')
 
 if __name__ == '__main__':
     host = os.environ.get('HOST', '127.0.0.1')

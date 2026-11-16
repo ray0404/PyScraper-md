@@ -270,6 +270,38 @@ from md_scraper.scraper import Scraper
 html_fragment = Scraper().to_html("<h1>Title</h1><p>Text.</p>")
 ```
 
+### TypeScript Engine
+
+A faithful TypeScript port of the Python engine lives in
+[`typescript/`](typescript/) (`pyscraper-md-ts`), rebuilt from the
+Python source and the engine that ships in the project's Muse Space.
+It reproduces the same pipeline, result shape, and outputs — static
+and dynamic scraping, crawling, local-file/MHT input, `file` assets,
+proxy/UA/delay/retries, and all four output formats — verified
+field-by-field against Python in `typescript/tests/side-by-side.test.ts`
+(byte-identical on `example.com`, the bundled blog fixture, a saved
+arXiv page, and the dynamic `quotes.toscrape.com/js/` page).
+
+```bash
+# Bun (no build step) — primary
+cd typescript && bun run src/cli.ts scrape https://example.com
+
+# Node (build first)
+cd typescript && npm install && npm run build && node dist/cli.js scrape https://example.com
+
+# Use it from the Python CLI / web app instead of the Python engine
+scraper scrape https://example.com --engine ts
+curl -X POST http://127.0.0.1:8080/api/scrape \
+  -H 'Content-Type: application/json' \
+  -d '{"url": "https://example.com", "engine": "ts"}'
+```
+
+The Python side reaches it through `src/md_scraper/ts_engine.py`
+(subprocess `--json` mode); the web UI has an Engine dropdown and
+`/api/download-zip` accepts the same `engine` field. See
+[`typescript/README.md`](typescript/README.md) for setup, library
+usage, the `--json` contract, and the parity table.
+
 ## 🐳 Docker Support
 
 Isolate the environment with Docker.
@@ -301,10 +333,20 @@ src/md_scraper/
 ├── cli.py          # Command-line entry point
 ├── scraper.py      # Core extraction & cleaning logic
 ├── crawler.py      # Recursive crawling engine
+├── ts_engine.py    # Bridge to the TypeScript engine (subprocess --json)
 ├── utils.py        # Helper functions (sanitization, headers)
 └── web/
     ├── app.py
     └── templates/
+typescript/         # TypeScript port of the engine (Bun/Node)
+├── src/
+│   ├── scraper.ts  # Scraper/Crawler classes, fetch, extraction
+│   ├── html.ts     # Hand-rolled tolerant HTML parser + serializer
+│   ├── markdown.ts # markdownify-compatible Markdown converter
+│   ├── sanitizer.ts# MarkdownSanitizer port
+│   ├── cli.ts      # CLI + --json machine mode
+│   └── index.ts    # Library entry
+└── tests/          # bun test suite incl. TS-vs-Python side-by-side
 ```
 
 ## ☁️ Deployment

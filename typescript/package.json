@@ -1,0 +1,35 @@
+{
+  "name": "pyscraper-md-ts",
+  "version": "0.1.0",
+  "description": "TypeScript port of the PyScraper-md scraper engine: dependency-free HTML-to-Markdown scraping (static + Playwright dynamic), usable as a library, CLI, or via the Flask web app.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "bin": {
+    "pyscraper-md-ts": "./dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test",
+    "start": "bun run src/cli.ts"
+  },
+  "optionalDependencies": {
+    "playwright": "^1.65.1"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.9.0"
+  },
+  "engines": {
+    "node": ">=20",
+    "bun": ">=1.0"
+  },
+  "license": "MIT"
+}

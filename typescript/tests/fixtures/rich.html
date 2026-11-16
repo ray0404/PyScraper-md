@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Rich Fixture</title>
+  <meta name="description" content="A rich test page.">
+  <meta name="author" content="Test Author">
+  <meta property="og:title" content="OG Rich Fixture">
+  <script type="application/ld+json">
+  {"@context": "https://schema.org", "@type": "Article",
+   "headline": "LD Rich Fixture", "datePublished": "2024-01-02",
+   "author": {"@type": "Person", "name": "LD Author"}}
+  </script>
+</head>
+<body>
+  <nav><ul><li><a href="/home">Home</a></li><li><a href="/about">About</a></li></ul></nav>
+  <main>
+    <article class="markdown-body">
+      <h1>Rich Fixture</h1>
+      <p>Intro with <strong>bold</strong>, <em>italic</em>, <code>inline</code> and a <a href="/docs/page" title="Docs">link</a>.</p>
+      <h2>Table</h2>
+      <table>
+        <thead><tr><th>Name</th><th>Value</th></tr></thead>
+        <tbody><tr><td>one</td><td>1</td></tr><tr><td>two</td><td>2</td></tr></tbody>
+      </table>
+      <table><tr><td>no</td><td>header</td></tr><tr><td>row</td><td>two</td></tr></table>
+      <h2>Lists</h2>
+      <ul><li>Item 1</li><li>Item 2<ul><li>Nested</li></ul></li></ul>
+      <ol start="3"><li>third</li><li>fourth</li></ol>
+      <h2>Code</h2>
+      <pre><code class="language-python">def hello():
+    print("hi")</code></pre>
+      <pre><code>npm install
+npm run build</code></pre>
+      <pre><code>SELECT id FROM users WHERE active = 1</code></pre>
+      <blockquote><p>Quoted text.</p><p>Second line.</p></blockquote>
+      <p>Line one<br>line two</p>
+      <hr>
+      <p><img src="/img/logo.png" alt="logo" title="Logo"> and an <svg width="10" height="10"><circle r="5" /></svg> icon.</p>
+      <p>More <a href="https://external.example.com/x">external</a> and <a href="mailto:a@b.c">mail</a> links.</p>
+    </article>
+  </main>
+  <footer><p>&copy; 2024 Fixture</p></footer>
+</body>
+</html>
