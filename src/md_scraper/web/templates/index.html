@@ -81,6 +81,7 @@
                         <select id="format" name="format">
                             <option value="markdown" {% if output_format == 'markdown' %}selected{% endif %}>Markdown</option>
                             <option value="html" {% if output_format == 'html' %}selected{% endif %}>HTML (main content)</option>
+                            <option value="html-document" {% if output_format == 'html-document' %}selected{% endif %}>HTML document (standalone)</option>
                             <option value="html-raw" {% if output_format == 'html-raw' %}selected{% endif %}>HTML (full document)</option>
                         </select>
                     </label>
@@ -149,7 +150,7 @@
                         <strong>Author:</strong> {{ res.metadata.author or 'N/A' }}<br>
                         <strong>URL:</strong> <a href="{{ res.url }}" target="_blank">{{ res.url }}</a>
                     </div>
-                    <textarea id="output-{{ loop.index0 }}" readonly>{% if output_format == 'html' %}{{ res.html or '' }}{% elif output_format == 'html-raw' %}{{ res.raw_html or '' }}{% else %}{{ res.markdown }}{% endif %}</textarea>
+                    <textarea id="output-{{ loop.index0 }}" readonly>{% if output_format == 'html' %}{{ res.html or '' }}{% elif output_format == 'html-document' %}{{ res.html_document or '' }}{% elif output_format == 'html-raw' %}{{ res.raw_html or '' }}{% else %}{{ res.markdown }}{% endif %}</textarea>
                     <button class="secondary" onclick="copyToClipboard('output-{{ loop.index0 }}')">Copy Output</button>
                 </div>
                 {% endfor %}

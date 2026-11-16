@@ -107,15 +107,21 @@ scraper scrape https://example.com/article --format html -o article.html
 
 # Full fetched document, untouched (includes nav, footer, scripts, etc.)
 scraper scrape https://example.com/article --format html-raw -o article-full.html
+
+# Standalone document: the cleaned content wrapped in a complete HTML
+# document (DOCTYPE, charset, viewport, title, self-contained stylesheet).
+# Open the file in any browser and it renders immediately, offline.
+scraper scrape https://example.com/article --format html-document -o article.html
 ```
 
 | Format | Description | File extension |
 |--------|-------------|----------------|
 | `markdown` (default) | Cleaned main content as GitHub Flavored Markdown. | `.md` |
 | `html` | Cleaned main content as HTML — same content as the Markdown output. | `.html` |
+| `html-document` | That same content wrapped in a complete standalone HTML document: DOCTYPE, `<html lang="en">`, UTF-8 charset, viewport, title, `<base href>` + canonical link (for http(s) sources, so relative links/images keep working), and an inline stylesheet — no external requests, renders fully offline. Already-wrapped input is returned unchanged. | `.html` |
 | `html-raw` | The complete fetched HTML document, untouched. | `.html` |
 
-The same formats are available in the Python library (`result['html']` and `result['raw_html']`), the Web API (`/api/scrape` returns both keys; `/api/download-zip` accepts `"format"`), and the Web UI (Output Format dropdown).
+The same formats are available in the Python library (`result['html']`, `result['html_document']` and `result['raw_html']`), the Web API (`/api/scrape` returns all keys; `/api/download-zip` accepts `"format"`), and the Web UI (Output Format dropdown).
 
 #### Asset Handling (Images & SVGs)
 
@@ -231,9 +237,16 @@ print(f"Markdown:\n{result['markdown']}")
 
 # HTML outputs (same scrape, no extra request):
 # - 'html': cleaned main content as HTML, content-equivalent of 'markdown'
+# - 'html_document': that content wrapped in a complete standalone
+#   HTML document, ready to open in a browser
 # - 'raw_html': the complete fetched document, untouched
 print(f"HTML:\n{result['html']}")
 print(f"Raw HTML length: {len(result['raw_html'])}")
+
+# Wrap any content HTML in a standalone document yourself:
+from md_scraper.scraper import Scraper
+doc = Scraper.wrap_html_document(result['html'], title=result['metadata']['title'],
+                                 source_url=result['url'], metadata=result['metadata'])
 
 # Convert an HTML fragment directly (no fetching, no main extraction):
 from md_scraper.scraper import Scraper

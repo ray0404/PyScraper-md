@@ -78,7 +78,7 @@ def cli():
 @click.option('--user-agent', '-ua', help='Custom User-Agent header or "random" for rotating User-Agents.')
 @click.option('--delay', type=float, default=0.0, help='Delay in seconds between requests (default: 0.0).')
 @click.option('--retries', type=int, default=3, help='Max retry attempts on request failure (default: 3).')
-@click.option('--format', 'output_format', type=click.Choice(['markdown', 'html', 'html-raw']), default='markdown', show_default=True, help='Output format: markdown (default), html (cleaned main content as HTML, content-equivalent of the Markdown), or html-raw (full fetched HTML document).')
+@click.option('--format', 'output_format', type=click.Choice(['markdown', 'html', 'html-document', 'html-raw']), default='markdown', show_default=True, help='Output format: markdown (default), html (cleaned main content as HTML, content-equivalent of the Markdown), html-document (that content wrapped in a complete standalone HTML document, ready to open in a browser), or html-raw (full fetched HTML document).')
 def scrape(urls, output, dynamic, strip, svg_action, image_action, assets_dir, server, crawl, depth, max_pages, only_subpaths, proxy, user_agent, delay, retries, output_format):
     """Scrape URL(s) and print/save content in the requested format.
 
@@ -176,7 +176,7 @@ def scrape(urls, output, dynamic, strip, svg_action, image_action, assets_dir, s
                             filename = f"{sanitize_filename(title)}{extension}"
                             file_path = os.path.join(output, filename)
 
-                        with open(file_path, 'w') as f:
+                        with open(file_path, 'w', encoding='utf-8') as f:
                             f.write(content)
                         click.echo(f"  -> Saved: {file_path}")
                     else:

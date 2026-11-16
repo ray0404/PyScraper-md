@@ -170,8 +170,9 @@ def download_zip():
         return jsonify({'error': 'No results provided'}), 400
 
     # Output format: 'markdown' (default), 'html' (cleaned main content
-    # as HTML) or 'html-raw' (full fetched document). Picks the matching
-    # content and file extension per result.
+    # as HTML), 'html-document' (that content wrapped in a complete
+    # standalone HTML document) or 'html-raw' (full fetched document).
+    # Picks the matching content and file extension per result.
     output_format = data.get('format', 'markdown')
 
     memory_file = io.BytesIO()
@@ -214,10 +215,12 @@ def index():
         max_pages = int(request.form.get('max_pages', 10))
         only_subpaths = 'only_subpaths' in request.form
         # Output format shown for the results: 'markdown' (default),
-        # 'html' (cleaned main content as HTML) or 'html-raw' (full
-        # fetched document). The scrape itself always returns all three.
+        # 'html' (cleaned main content as HTML), 'html-document' (that
+        # content wrapped in a complete standalone HTML document) or
+        # 'html-raw' (full fetched document). The scrape itself always
+        # returns all four.
         output_format = request.form.get('format', 'markdown')
-        if output_format not in ('markdown', 'html', 'html-raw'):
+        if output_format not in ('markdown', 'html', 'html-document', 'html-raw'):
             output_format = 'markdown'
 
         target_urls = [u.strip() for u in urls_input.split('\n') if u.strip()]

@@ -380,6 +380,196 @@ def test_cli_format_html_on_local_file(tmp_path):
 
 
 # ---------------------------------------------------------------------------
+# Standalone HTML documents: wrap_html_document() + 'html-document' format
+# ---------------------------------------------------------------------------
+
+def test_wrap_html_document_structure():
+    doc = Scraper.wrap_html_document(
+        '<main><h1>Title</h1><p>Text.</p></main>',
+        title='My Page',
+        source_url='https://example.com/article',
+        metadata={'author': 'Jane', 'description': 'A page.'},
+    )
+    assert doc.startswith('<!DOCTYPE html>\n<html lang="en">')
+    assert '<meta charset="utf-8">' in doc
+    assert '<meta name="viewport" content="width=device-width, initial-scale=1">' in doc
+    assert '<title>My Page</title>' in doc
+    assert '<meta name="author" content="Jane">' in doc
+    assert '<meta name="description" content="A page.">' in doc
+    assert '<base href="https://example.com/article">' in doc
+    assert '<link rel="canonical" href="https://example.com/article">' in doc
+    assert '<style>' in doc and 'max-width: 800px' in doc
+    assert '<main><h1>Title</h1><p>Text.</p></main>' in doc
+    assert '<!-- Scraped from https://example.com/article by md-scraper -->' in doc
+    assert doc.rstrip().endswith('</html>')
+    # Exactly one body element, and the content sits inside it.
+    assert doc.count('<body>') == 1 and doc.count('</body>') == 1
+    assert doc.index('<body>') < doc.index('<main>')
+
+
+def test_wrap_html_document_escapes_title_and_meta():
+    doc = Scraper.wrap_html_document('<p>x</p>', title='<b>Bold</b> & "quoted"')
+    assert '<title>&lt;b&gt;Bold&lt;/b&gt; &amp; &quot;quoted&quot;</title>' in doc
+    assert '<b>Bold</b>' not in doc.split('<body>')[0]
+
+
+def test_wrap_html_document_title_fallbacks():
+    doc = Scraper.wrap_html_document('<p>x</p>', source_url='https://example.com/x')
+    assert '<title>https://example.com/x</title>' in doc
+    assert '<title>Scraped Page</title>' in Scraper.wrap_html_document('<p>x</p>')
+
+
+def test_wrap_html_document_no_base_for_local_source():
+    doc = Scraper.wrap_html_document('<p>x</p>', title='Local',
+                                     source_url='/tmp/page.html')
+    assert '<base' not in doc
+    assert 'rel="canonical"' not in doc
+
+
+def test_wrap_html_document_include_base_false():
+    doc = Scraper.wrap_html_document('<p>x</p>', title='T',
+                                     source_url='https://example.com/x',
+                                     include_base=False)
+    assert '<base' not in doc
+    # The canonical link is still useful without a base element.
+    assert '<link rel="canonical" href="https://example.com/x">' in doc
+
+
+def test_wrap_html_document_returns_full_document_unchanged():
+    full = ('<!DOCTYPE html>\n<html><head><title>Old</title></head>'
+            '<body><p>x</p></body></html>')
+    assert Scraper.wrap_html_document(full) == full
+    full2 = '<html lang="en"><head></head><body><p>x</p></body></html>'
+    assert Scraper.wrap_html_document(full2) == full2
+
+
+def test_wrap_html_document_unwraps_body_fragment():
+    doc = Scraper.wrap_html_document('<body><p>Inner</p></body>', title='T')
+    assert doc.count('<body>') == 1
+    assert '<p>Inner</p>' in doc
+
+
+def test_wrap_html_document_empty():
+    assert Scraper.wrap_html_document('') == ''
+    assert Scraper.wrap_html_document('   ') == ''
+
+
+def test_scrape_returns_html_document():
+    result = _scrape_sample()
+    doc = result['html_document']
+    assert doc.startswith('<!DOCTYPE html>')
+    assert '<title>Sample Blog Post</title>' in doc
+    assert '<base href="https://example.com/blog/sample">' in doc
+    assert '<main>' in doc
+    assert 'Sample Blog Post' in doc
+    assert 'Home' not in doc
+    assert '2023 Sample Blog' not in doc
+    # The wrapped document contains the same content fragment as 'html'.
+    assert result['html'].strip() in doc
+    # Same visible body text as the content HTML.
+    body_text = _text_of(str(BeautifulSoup(doc, 'lxml').body))
+    assert 'Sample Blog Post' in body_text
+    assert 'Item 1' in body_text
+    assert 'Home' not in body_text
+
+
+def test_scrape_html_document_omits_base_for_file_assets(tmp_path):
+    result = _scrape_sample(image_action='file',
+                            assets_dir=str(tmp_path / 'assets'))
+    assert '<base' not in result['html_document']
+    # The document itself is still produced.
+    assert result['html_document'].startswith('<!DOCTYPE html>')
+
+
+def test_select_output_html_document():
+    result = {
+        'markdown': '# T',
+        'html': '<main><h1>T</h1></main>',
+        'html_document': '<!DOCTYPE html>\n<html><body><main><h1>T</h1></main></body></html>',
+        'raw_html': '<html><body><main><h1>T</h1></main></body></html>',
+        'metadata': {'title': 'T'},
+        'url': 'https://example.com',
+    }
+    content, ext = select_output(result, 'html-document')
+    assert ext == '.html'
+    assert content.startswith('<!DOCTYPE html>')
+
+
+def test_select_output_html_document_wraps_locally_for_old_results():
+    result = {
+        'markdown': '# T',
+        'html': '<main><h1>T</h1></main>',
+        'raw_html': '<html><body><main><h1>T</h1></main></body></html>',
+        'metadata': {'title': 'T'},
+        'url': 'https://example.com/x',
+    }
+    content, ext = select_output(result, 'html-document')
+    assert ext == '.html'
+    assert content.startswith('<!DOCTYPE html>')
+    assert '<title>T</title>' in content
+    assert '<base href="https://example.com/x">' in content
+    assert '<main><h1>T</h1></main>' in content
+
+
+def test_select_output_html_document_falls_back_to_raw_html():
+    result = {
+        'markdown': '# T',
+        'raw_html': _sample_html(),
+        'metadata': {'title': 'Sample'},
+        'url': 'https://example.com/blog/sample',
+    }
+    content, ext = select_output(result, 'html-document', Scraper())
+    assert ext == '.html'
+    assert content.startswith('<!DOCTYPE html>')
+    assert 'Sample Blog Post' in content
+    assert 'Home' not in content
+
+
+def test_cli_format_html_document():
+    result, _ = _run_cli(['scrape', 'https://example.com',
+                          '--format', 'html-document'])
+    assert result.exit_code == 0
+    assert '<!DOCTYPE html>' in result.output
+    assert '<title>Test</title>' in result.output
+    assert '<main><h1>Mocked Markdown</h1></main>' in result.output
+
+
+def test_cli_format_html_document_output_file(tmp_path):
+    outdir = tmp_path / "outdir"
+    outdir.mkdir()
+    runner = CliRunner()
+    with patch("md_scraper.cli.Scraper") as mock_scraper_class:
+        mock_instance = mock_scraper_class.return_value
+        mock_instance.__enter__.return_value = mock_instance
+        mock_instance.scrape.return_value = _mocked_cli_result()
+        result = runner.invoke(cli, [
+            'scrape', 'https://example.com', '--format', 'html-document',
+            '--output', str(outdir),
+        ])
+    assert result.exit_code == 0
+    assert (outdir / "Test.html").read_text().startswith('<!DOCTYPE html>')
+
+
+def test_cli_format_html_document_on_local_file(tmp_path):
+    """End-to-end: real scraper on a local file with --format html-document."""
+    page = tmp_path / "page.html"
+    page.write_text(
+        "<html><head><title>Local</title></head><body>"
+        "<nav>Nav</nav><main><h1>Local</h1><p>Text.</p></main>"
+        "</body></html>",
+        encoding="utf-8",
+    )
+    runner = CliRunner()
+    result = runner.invoke(cli, ['scrape', str(page),
+                                  '--format', 'html-document'])
+    assert result.exit_code == 0
+    assert '<!DOCTYPE html>' in result.output
+    assert '<title>Local</title>' in result.output
+    assert '<main>' in result.output
+    assert 'Nav' not in result.output
+
+
+# ---------------------------------------------------------------------------
 # Web API: /api/scrape gains the keys, /api/download-zip honors format
 # ---------------------------------------------------------------------------
 
@@ -455,3 +645,55 @@ def test_download_zip_defaults_to_markdown(client):
     with zipfile.ZipFile(io.BytesIO(response.data), 'r') as zf:
         assert 'Page_1.md' in zf.namelist()
         assert zf.read('Page_1.md').decode('utf-8') == 'Content 1'
+
+
+def test_download_zip_format_html_document(client):
+    results = [{
+        'url': 'https://example.com/1',
+        'markdown': 'Content 1',
+        'html': '<main><h1>Content 1</h1></main>',
+        'html_document': '<!DOCTYPE html>\n<html><body><main><h1>Content 1</h1></main></body></html>',
+        'raw_html': '<html><body>Content 1</body></html>',
+        'metadata': {'title': 'Page 1'},
+    }]
+    response = client.post('/api/download-zip',
+                           data=json.dumps({'results': results, 'format': 'html-document'}),
+                           content_type='application/json')
+    assert response.status_code == 200
+    with zipfile.ZipFile(io.BytesIO(response.data), 'r') as zf:
+        assert 'Page_1.html' in zf.namelist()
+        assert zf.read('Page_1.html').decode('utf-8').startswith('<!DOCTYPE html>')
+
+
+def test_api_scrape_returns_html_document_key(client):
+    with patch("md_scraper.web.app.Scraper.scrape") as mock_scrape:
+        mock_scrape.return_value = {
+            'url': 'https://example.com',
+            'markdown': '# Success',
+            'html': '<main><h1>Success</h1></main>',
+            'html_document': '<!DOCTYPE html>\n<html><body><main><h1>Success</h1></main></body></html>',
+            'raw_html': '<html><body><main><h1>Success</h1></main></body></html>',
+            'metadata': {'title': 'Test Title'},
+        }
+        response = client.post('/api/scrape', json={'url': 'https://example.com'})
+        assert response.status_code == 200
+        data = response.get_json()
+        assert data['html_document'].startswith('<!DOCTYPE html>')
+
+
+def test_index_shows_html_document(client):
+    with patch("md_scraper.web.app.Scraper.scrape") as mock_scrape:
+        mock_scrape.return_value = {
+            'url': 'https://example.com',
+            'markdown': '# Success',
+            'html': '<main><h1>Success</h1></main>',
+            'html_document': '<!DOCTYPE html>\n<html><body><main><h1>Success</h1></main></body></html>',
+            'raw_html': '<html><body><main><h1>Success</h1></main></body></html>',
+            'metadata': {'title': 'Test Title'},
+        }
+        response = client.post('/', data={'urls': 'https://example.com',
+                                          'format': 'html-document'})
+        assert response.status_code == 200
+        # Jinja escapes the HTML inside the textarea.
+        assert b'&lt;!DOCTYPE html&gt;' in response.data
+        assert b'HTML document (standalone)' in response.data

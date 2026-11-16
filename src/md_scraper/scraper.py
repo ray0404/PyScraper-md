@@ -3,6 +3,7 @@ import json
 import os
 import base64
 import email
+import html as html_lib
 import re
 import concurrent.futures
 from typing import Union, Optional, List, Dict
@@ -13,6 +14,40 @@ from markdownify import markdownify as md
 from md_scraper.sanitizer import MarkdownSanitizer
 
 NAV_SIDEBAR_RE = re.compile(r'sidebar|menu|nav|toc', re.I)
+
+# Self-contained stylesheet for standalone HTML documents produced by
+# wrap_html_document(). No external requests: system font stack only, so a
+# scraped page renders fully offline. Covers the elements Markdown output
+# typically produces: headings, paragraphs, links, lists, code blocks,
+# tables, images and SVGs.
+STANDALONE_DOCUMENT_CSS = """
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; line-height: 1.6; color: #1a1a1a; background: #fff; max-width: 800px; margin: 0 auto; padding: 1rem 1.5rem 3rem; overflow-wrap: break-word; }
+h1, h2, h3, h4, h5, h6 { line-height: 1.25; margin: 1.5em 0 0.5em; }
+h1 { font-size: 2rem; border-bottom: 1px solid #ddd; padding-bottom: 0.3em; }
+h2 { font-size: 1.5rem; border-bottom: 1px solid #eee; padding-bottom: 0.3em; }
+a { color: #0969da; }
+a:visited { color: #8250df; }
+img, svg, video { max-width: 100%; height: auto; }
+pre { background: #f6f8fa; border: 1px solid #ddd; border-radius: 6px; padding: 1rem; overflow-x: auto; }
+code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.875em; }
+pre code { font-size: 1em; background: none; padding: 0; }
+p code, li code, td code { background: #f6f8fa; border-radius: 3px; padding: 0.2em 0.4em; }
+table { border-collapse: collapse; display: block; overflow-x: auto; margin: 1em 0; }
+th, td { border: 1px solid #ddd; padding: 0.5em 1em; text-align: left; }
+th { background: #f6f8fa; }
+blockquote { border-left: 4px solid #ddd; margin: 1em 0; padding: 0 1em; color: #555; }
+hr { border: none; border-top: 1px solid #ddd; margin: 2em 0; }
+@media (prefers-color-scheme: dark) {
+  body { color: #e6e6e6; background: #0d1117; }
+  h1 { border-bottom-color: #333; }
+  h2 { border-bottom-color: #222; }
+  a { color: #58a6ff; }
+  a:visited { color: #bc8cff; }
+  pre, p code, li code, td code, th { background: #161b22; }
+  pre, th, td, blockquote { border-color: #333; }
+  blockquote { color: #aaa; }
+}
+"""
 
 # Try to import playwright, but don't crash if missing
 try:
@@ -800,6 +835,105 @@ class Scraper:
         """
         return str(self.extract_main_content(raw_html, as_soup=True))
 
+    @staticmethod
+    def wrap_html_document(content_html: str, title: Optional[str] = None,
+                           source_url: Optional[str] = None,
+                           metadata: Optional[dict] = None,
+                           include_base: bool = True) -> str:
+        """
+        Wraps cleaned content HTML in a complete, standalone HTML document.
+
+        The result opens directly in a browser with no extra steps: DOCTYPE,
+        ``<html lang="en">``, UTF-8 charset, viewport meta, a ``<title>``,
+        and a self-contained stylesheet (no external requests, so the page
+        renders fully offline). When the source is an http(s) URL, a
+        ``<base href>`` and canonical link are added so relative links and
+        images in the content keep resolving against the original page.
+
+        Args:
+            content_html (str): The content HTML to wrap (e.g. the ``html``
+                value from :meth:`scrape`, or :meth:`to_html` output).
+            title (Optional[str]): Page title. Falls back to the source URL,
+                then to ``"Scraped Page"``.
+            source_url (Optional[str]): The URL the content was scraped from.
+            metadata (Optional[dict]): Scrape metadata; ``author`` and
+                ``description`` are emitted as ``<meta>`` tags when present.
+            include_base (bool): Whether to emit ``<base href>``. Pass False
+                when assets were saved locally (``image_action``/``svg_action``
+                ``'file'``), since a remote base would break their relative
+                paths.
+
+        Returns:
+            str: The standalone HTML document. If ``content_html`` is
+                already a full document (starts with a DOCTYPE or an
+                ``<html>`` tag), it is returned unchanged.
+        """
+        text = (content_html or '').strip()
+        if not text:
+            return ''
+        # Already a full document: do not double-wrap.
+        if re.match(r'(?is)(<!doctype html|<html[\s>])', text):
+            return content_html
+
+        # A top-level <body>...</body> fragment would nest a <body> inside
+        # the document body; keep only its contents.
+        body_match = re.match(r'(?is)<body[^>]*>(.*)</body\s*>$', text)
+        if body_match:
+            text = body_match.group(1).strip()
+
+        meta = metadata or {}
+        page_title = html_lib.escape(title or source_url or 'Scraped Page')
+        is_http = False
+        if source_url:
+            try:
+                is_http = urlparse(source_url).scheme in ('http', 'https')
+            except ValueError:
+                is_http = False
+
+        head_lines = [
+            '<meta charset="utf-8">',
+            '<meta name="viewport" content="width=device-width, initial-scale=1">',
+            f'<title>{page_title}</title>',
+        ]
+        author = meta.get('author')
+        if author:
+            head_lines.append(
+                f'<meta name="author" content="{html_lib.escape(str(author), quote=True)}">'
+            )
+        description = meta.get('description')
+        if description:
+            head_lines.append(
+                f'<meta name="description" content="{html_lib.escape(str(description), quote=True)}">'
+            )
+        if is_http:
+            if include_base:
+                head_lines.append(
+                    f'<base href="{html_lib.escape(source_url, quote=True)}">'
+                )
+            head_lines.append(
+                f'<link rel="canonical" href="{html_lib.escape(source_url, quote=True)}">'
+            )
+        head_lines.append(f'<style>\n{STANDALONE_DOCUMENT_CSS.strip()}\n</style>')
+
+        head = '\n'.join(head_lines)
+        source_comment = ''
+        if source_url:
+            source_comment = (
+                f'<!-- Scraped from {html_lib.escape(source_url)} by md-scraper -->\n'
+            )
+        return (
+            '<!DOCTYPE html>\n'
+            '<html lang="en">\n'
+            '<head>\n'
+            f'{head}\n'
+            '</head>\n'
+            '<body>\n'
+            f'{source_comment}'
+            f'{text}\n'
+            '</body>\n'
+            '</html>\n'
+        )
+
     def extract_nav_links(self, html: Union[str, BeautifulSoup], base_url: str) -> list:
         """
         Extracts navigation links from the HTML to facilitate smart crawling.
@@ -933,10 +1067,13 @@ class Scraper:
 
         Returns:
             dict: A dictionary containing 'url', 'metadata', 'markdown',
-                'html', 'raw_html', and 'nav_links'. 'html' is the cleaned
-                main content as HTML — the content-equivalent of 'markdown'
-                (same extraction, same SVG/image/strip handling). 'raw_html'
-                is the complete fetched document, untouched.
+                'html', 'html_document', 'raw_html', and 'nav_links'.
+                'html' is the cleaned main content as HTML — the
+                content-equivalent of 'markdown' (same extraction, same
+                SVG/image/strip handling). 'html_document' is that same
+                content wrapped in a complete standalone HTML document,
+                ready to open in a browser. 'raw_html' is the complete
+                fetched document, untouched.
         """
         if dynamic:
             html = self.fetch_html_dynamic(url, proxy=proxy, user_agent=user_agent, delay=delay)
@@ -961,11 +1098,27 @@ class Scraper:
         markdown = self.to_markdown(main_soup, restore_original_srcs=False, **options)
         html_content = str(main_soup)
 
+        # Standalone document wrapping. A <base href> would break locally
+        # saved assets, so it is omitted when images/SVGs were written to
+        # files instead of kept remote or embedded.
+        include_base = (
+            options.get('image_action', 'remote') != 'file'
+            and options.get('svg_action', 'image') != 'file'
+        )
+        html_document = self.wrap_html_document(
+            html_content,
+            title=metadata.get('title'),
+            source_url=url,
+            metadata=metadata,
+            include_base=include_base,
+        )
+
         return {
             'url': url,
             'metadata': metadata,
             'markdown': markdown,
             'html': html_content,
+            'html_document': html_document,
             'raw_html': html,
             'nav_links': nav_links,
             'internal_links': internal_links

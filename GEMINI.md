@@ -8,6 +8,7 @@
 *   **Intelligent Extraction:** Removes boilerplate (ads, navs) to focus on main content.
 *   **Format:** Outputs clean Markdown with tables, code blocks, and links.
 *   **HTML Output:** Every scrape also returns the cleaned main content as HTML (`result['html']`, content-equivalent of the Markdown) and the full fetched document (`result['raw_html']`), selectable via `--format html` / `--format html-raw` in the CLI, `"format"` in the Web API, and the Output Format dropdown in the Web UI.
+*   **Standalone HTML Documents:** `--format html-document` (also `result['html_document']` / `Scraper.wrap_html_document()`) wraps the content HTML in a complete document — DOCTYPE, `<html lang="en">`, UTF-8 charset, viewport, title, author/description metas, `<base href>` + canonical link for http(s) sources, and a self-contained stylesheet with dark-mode support — so the file renders in a browser immediately, fully offline. Already-wrapped input is returned unchanged; `<base>` is omitted when images/SVGs were saved as local files, so their relative paths keep working.
 *   **Modes:** CLI, Web UI (Flask), and Python Library.
 *   **Dynamic Support:** Handles JS-heavy sites via Playwright.
 *   **Remote Offloading:** Can delegate scraping to a remote server (Cloud Run), useful for restricted environments like Termux.
@@ -19,7 +20,7 @@
 *   **Heuristic Language Detection:** Automatic programming language detection (`bash`, `json`, `sql`, `javascript`, etc.) for markdown code fences.
 *   **Robust Semantic Extraction:** Prioritizes W3C `<main>` and `[role="main"]` containers with anchored regex matching to preserve full document verbosity and eliminate boilerplate/noise.
 *   **Link Extraction:** Optimized by moving redundant string operations (`base_url` cleaning) out of recursive loops, resulting in a **2.6x speedup** for large page link parsing.
-*   **HTML Output Modes:** `scrape()` returns `html` (cleaned main content as HTML, produced from the same processed DOM as the Markdown, so SVG/image/`strip` handling matches) and `raw_html` (complete fetched document). `Scraper.to_html()` converts an HTML fragment through the same pipeline; `Scraper.content_html()` extracts content HTML from a raw document as a fallback for results from older servers. CLI `--format` (`markdown` / `html` / `html-raw`) and the Web API/ZIP `format` field select the output.
+*   **HTML Output Modes:** `scrape()` returns `html` (cleaned main content as HTML, produced from the same processed DOM as the Markdown, so SVG/image/`strip` handling matches), `html_document` (that content wrapped by `wrap_html_document()` into a standalone, browser-ready document) and `raw_html` (complete fetched document). `Scraper.to_html()` converts an HTML fragment through the same pipeline; `Scraper.content_html()` extracts content HTML from a raw document as a fallback for results from older servers. CLI `--format` (`markdown` / `html` / `html-document` / `html-raw`) and the Web API/ZIP `format` field select the output.
 *   **Regex Sanitization:** All Markdown sanitization patterns are pre-compiled at the class level in `MarkdownSanitizer`, reducing instantiation overhead and increasing overall throughput by ~2.2%.
 *   **Crawler Efficiency:** The crawler subpath check was refactored to use tuple-based `startswith` checks, providing a ~90% performance boost in path validation logic.
 
@@ -27,7 +28,7 @@
 
 The project follows a modular structure managed by **Poetry**.
 
-*   **`src/md_scraper/scraper.py`**: The core `Scraper` class containing all extraction logic (`fetch_html`, `fetch_html_dynamic`, `to_markdown`, `to_html`, `content_html`). `scrape()` returns `markdown`, `html` (content-equivalent HTML), and `raw_html` (full document).
+*   **`src/md_scraper/scraper.py`**: The core `Scraper` class containing all extraction logic (`fetch_html`, `fetch_html_dynamic`, `to_markdown`, `to_html`, `content_html`, `wrap_html_document`). `scrape()` returns `markdown`, `html` (content-equivalent HTML), `html_document` (standalone browser-ready document), and `raw_html` (full document).
 *   **`src/md_scraper/cli.py`**: The CLI entry point using `Click`. Defines commands like `scrape`.
 *   **`src/md_scraper/web/app.py`**: The Flask application for the Web UI and API endpoints.
 *   **`scraper-go.sh`**: An interactive Bash script for batch processing and user-friendly CLI interaction.
