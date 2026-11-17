@@ -15,7 +15,7 @@
     }
   },
   "bin": {
-    "pyscraper-md-ts": "./dist/cli.js"
+    "pyscraper-md-ts": "dist/cli.js"
   },
   "scripts": {
     "build": "tsc",
