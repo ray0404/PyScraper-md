@@ -12,7 +12,7 @@
 *   **Modes:** CLI, Web UI (Flask), and Python Library.
 *   **Dynamic Support:** Handles JS-heavy sites via Playwright.
 *   **Remote Offloading:** Can delegate scraping to a remote server (Cloud Run), useful for restricted environments like Termux.
-*   **TypeScript Engine:** A faithful port of the Python engine lives in `typescript/` (`pyscraper-md-ts`): same pipeline, result shape, and outputs (static + dynamic, crawling, local-file/MHT input, `file` assets, proxy/UA/delay/retries, all four formats), verified byte-identical against Python in `typescript/tests/side-by-side.test.ts`. Usable as a Bun/Node CLI and library, and from Python via `--engine ts` (CLI), `engine: "ts"` (`/api/scrape`, `/api/download-zip`, web UI dropdown), bridged by `src/md_scraper/ts_engine.py` through the TS CLI's `--json` machine mode. The TS engine is bundled into the Python wheel (`typescript/src/` + built `typescript/dist/`, via `[tool.poetry] include`; build a release wheel with `scripts/build-wheel.sh`) and is also a publishable npm package (`typescript/package.json`, `files: ["dist", "README.md"]`; `npm publish` needs an npm login). See `typescript/README.md`.
+*   **TypeScript Engine:** A faithful port of the Python engine lives in `typescript/` (`@ray0404/pyscraper-md-ts`): same pipeline, result shape, and outputs (static + dynamic, crawling, local-file/MHT input, `file` assets, proxy/UA/delay/retries, all four formats), verified byte-identical against Python in `typescript/tests/side-by-side.test.ts`. Usable as a Bun/Node CLI and library, and from Python via `--engine ts` (CLI), `engine: "ts"` (`/api/scrape`, `/api/download-zip`, web UI dropdown), bridged by `src/md_scraper/ts_engine.py` through the TS CLI's `--json` machine mode. The TS engine is bundled into the Python wheel (`typescript/src/` + built `typescript/dist/`, via `[tool.poetry] include`; build a release wheel with `scripts/build-wheel.sh`) and is also a publishable npm package (`typescript/package.json`, `files: ["dist", "README.md"]`; `npm publish` needs an npm login). See `typescript/README.md`.
 
 ## Performance & Features (v0.2.x)
 
@@ -34,7 +34,7 @@ The project follows a modular structure managed by **Poetry**.
 *   **`src/md_scraper/cli.py`**: The CLI entry point using `Click`. Defines commands like `scrape`. `--engine python|ts` (default `python`) selects the engine; with `--server` the choice is sent to the server.
 *   **`src/md_scraper/web/app.py`**: The Flask application for the Web UI and API endpoints. `/api/scrape` and `/api/download-zip` accept `engine: "python" | "ts"` (default `"python"`); the web UI has an Engine dropdown.
 *   **`src/md_scraper/ts_engine.py`**: Bridge to the TypeScript engine — locates the TS CLI (first match wins: `PYSCRAPER_TS_CMD` env override; the copy bundled in the wheel at `site-packages/typescript/` — `src/cli.ts` + Bun, then `dist/cli.js` + Node; a repo checkout's `typescript/` — same order; finally a globally installed `pyscraper-md-ts` binary on PATH) and runs it via its `--json` mode (`scrape_ts` / `crawl_ts` / `wrap_ts` / `content_html_ts`). Under Node it defaults `NODE_USE_ENV_PROXY=1` and `NODE_EXTRA_CA_CERTS` from `SSL_CERT_FILE`, because Node's fetch ignores both by default.
-*   **`typescript/`**: The TypeScript port (`pyscraper-md-ts`). `src/scraper.ts` (Scraper/Crawler, fetch, extraction), `src/html.ts` (hand-rolled tolerant HTML parser + serializer), `src/markdown.ts` (markdownify-compatible converter), `src/sanitizer.ts`, `src/cli.ts` (CLI + `--json` machine mode), `src/index.ts` (library entry). Dependency-free except optional `playwright` for dynamic mode. Tests in `typescript/tests/` (`bun test`), including a TS-vs-Python side-by-side suite.
+*   **`typescript/`**: The TypeScript port (`@ray0404/pyscraper-md-ts`). `src/scraper.ts` (Scraper/Crawler, fetch, extraction), `src/html.ts` (hand-rolled tolerant HTML parser + serializer), `src/markdown.ts` (markdownify-compatible converter), `src/sanitizer.ts`, `src/cli.ts` (CLI + `--json` machine mode), `src/index.ts` (library entry). Dependency-free except optional `playwright` for dynamic mode. Tests in `typescript/tests/` (`bun test`), including a TS-vs-Python side-by-side suite.
 *   **`scraper-go.sh`**: An interactive Bash script for batch processing and user-friendly CLI interaction.
 *   **`Dockerfile`**: Docker configuration for deploying the Flask app (with Playwright support) to Google Cloud Run.
 *   **`pyproject.toml`**: Dependency management and build configuration.
@@ -146,7 +146,7 @@ The TS engine ships two ways (both verified, neither published yet):
   `src/md_scraper/ts_engine.py`); `engine="ts"` still needs Bun or
   Node on PATH at runtime — Poetry cannot install a JS runtime.
 * **As its own npm package.** `typescript/package.json` is
-  `pyscraper-md-ts` 0.1.0 with a `"files": ["dist", "README.md"]`
+  `@ray0404/pyscraper-md-ts` 0.1.0 with a `"files": ["dist", "README.md"]`
   allowlist (without it, gitignored `dist/` would be left out of the
   tarball even though `main`/`bin` point at it). Validate with
   `npm pack --dry-run` / `npm publish --dry-run`; the real publish is

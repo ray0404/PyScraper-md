@@ -273,7 +273,7 @@ html_fragment = Scraper().to_html("<h1>Title</h1><p>Text.</p>")
 ### TypeScript Engine
 
 A faithful TypeScript port of the Python engine lives in
-[`typescript/`](typescript/) (`pyscraper-md-ts`), rebuilt from the
+[`typescript/`](typescript/) (`@ray0404/pyscraper-md-ts`), rebuilt from the
 Python source and the engine that ships in the project's Muse Space.
 It reproduces the same pipeline, result shape, and outputs — static
 and dynamic scraping, crawling, local-file/MHT input, `file` assets,
@@ -314,7 +314,7 @@ The TS engine ships two ways:
   because poetry-core has no build hooks and wheels run no code at
   install time. `engine="ts"` still needs Bun or Node on PATH at
   runtime — Poetry cannot install a JavaScript runtime.
-* **As its own npm package** (`pyscraper-md-ts`, see
+* **As its own npm package** (`@ray0404/pyscraper-md-ts`, see
   [`typescript/README.md`](typescript/README.md)). The Python bridge
   falls back to a globally installed `pyscraper-md-ts` binary when
   neither a bundled copy nor a repo checkout is available.

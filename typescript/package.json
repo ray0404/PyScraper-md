@@ -1,7 +1,10 @@
 {
-  "name": "pyscraper-md-ts",
+  "name": "@ray0404/pyscraper-md-ts",
   "version": "0.1.0",
   "description": "TypeScript port of the PyScraper-md scraper engine: dependency-free HTML-to-Markdown scraping (static + Playwright dynamic), usable as a library, CLI, or via the Flask web app.",
+  "publishConfig": {
+    "access": "public"
+  },
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

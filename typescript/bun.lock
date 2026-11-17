@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "pyscraper-md-ts",
+      "name": "@ray0404/pyscraper-md-ts",
       "devDependencies": {
         "@types/node": "^24.0.0",
         "typescript": "^5.9.0",

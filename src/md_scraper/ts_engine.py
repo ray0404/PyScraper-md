@@ -84,7 +84,7 @@ def ts_command() -> List[str]:
         "found, and no pyscraper-md-ts binary is on PATH. Install Bun "
         "(then bun run typescript/src/cli.ts works), build the TS package "
         "(cd typescript && npm run build) so typescript/dist/cli.js exists, "
-        "or install the published engine (npm install -g pyscraper-md-ts)."
+        "or install the published engine (npm install -g @ray0404/pyscraper-md-ts)."
     )
 
 

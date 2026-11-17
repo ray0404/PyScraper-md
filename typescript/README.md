@@ -1,4 +1,4 @@
-# pyscraper-md-ts — TypeScript Engine
+# @ray0404/pyscraper-md-ts — TypeScript Engine
 
 A faithful TypeScript port of the Python `md-scraper` engine
 (`src/md_scraper/`), rebuilt from the Python source (the spec) and the
@@ -235,9 +235,12 @@ here.
 
 ### As its own npm package
 
-This folder is the publishable package `pyscraper-md-ts` (name free
-on the registry as of 2026-11-16). `package.json` has a
-`"files": ["dist", "README.md"]` allowlist — without it, gitignored
+This folder is the publishable package `@ray0404/pyscraper-md-ts`
+(scoped to Adolfo's npm account, matching `@ray0404/jref`; the name
+was free on the registry as of 2026-11-16). It publishes public via
+`"publishConfig": {"access": "public"}` in `package.json` — scoped
+packages default to private, which would fail on a free npm account.
+`package.json` has a `"files": ["dist", "README.md"]` allowlist — without it, gitignored
 `dist/` would be left out of the tarball even though `main` and `bin`
 point at it. Only `dist/` (compiled JS + types) is published, not
 `src/`; the package stays dependency-free apart from optional
@@ -250,6 +253,7 @@ npm run build
 npm pack --dry-run      # check the file list: dist/ + README.md + package.json
 npm publish --dry-run   # validates without publishing
 npm publish             # the real thing — needs an npm login
+                        # (publishes public via publishConfig)
 ```
 
 The published `bin` is `pyscraper-md-ts` (`dist/cli.js`); the Python
