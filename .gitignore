@@ -189,3 +189,4 @@ md-scraper.skill
 
 # Node / Bun
 node_modules/
+/typescript/package-lock.json
