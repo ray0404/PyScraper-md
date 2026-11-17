@@ -11,14 +11,25 @@ How the TS CLI is located (first match wins):
 1. ``PYSCRAPER_TS_CMD`` — a full command line, e.g.
    ``bun run /path/to/typescript/src/cli.ts`` or
    ``node /path/to/typescript/dist/cli.js``.
-2. ``bun`` on PATH + ``typescript/src/cli.ts`` present — run the
-   TypeScript source directly (no build step).
-3. ``node`` on PATH + ``typescript/dist/cli.js`` present — run the
-   compiled output (``npm run build`` in ``typescript/`` first).
+2. The copy bundled in the wheel: ``typescript/`` sits next to the
+   ``md_scraper`` package (``site-packages/typescript/``, added via
+   ``[tool.poetry] include`` in ``pyproject.toml``) — ``src/cli.ts``
+   run with ``bun`` if present, else ``dist/cli.js`` run with ``node``.
+   A wheel install has no repo checkout, so this is the only copy it has.
+3. A repo checkout: ``typescript/`` at the repo root (dev installs) —
+   again ``src/cli.ts`` + ``bun`` first, then ``dist/cli.js`` + ``node``.
+4. A globally installed ``pyscraper-md-ts`` binary on PATH (the
+   published npm package's ``bin``) — run directly, it is ``dist/cli.js``.
 
 The subprocess inherits this process's environment, so proxy settings
 for dynamic scraping (``PYSCRAPER_PROXY``, ``CHROMIUM_PATH``) flow
 through unchanged.
+
+Note: engine="ts" still needs Bun or Node on PATH at runtime — Poetry
+cannot install a JavaScript runtime. Only the TS *sources* are bundled
+in the wheel; there is no build step at install time (wheels run no
+code on install), so ``dist/`` must be built at packaging time
+(``scripts/build-wheel.sh``) for the Node path to exist in the wheel.
 """
 
 import json
@@ -35,6 +46,15 @@ _TS_DIR = os.path.join(_REPO_ROOT, "typescript")
 _TS_SRC_CLI = os.path.join(_TS_DIR, "src", "cli.ts")
 _TS_DIST_CLI = os.path.join(_TS_DIR, "dist", "cli.js")
 
+# Copy bundled in the wheel: typescript/ sits next to the md_scraper
+# package (site-packages/typescript/), not inside it — poetry-core 2.x
+# cannot map a non-Python tree into a package (packages entries require
+# a .py file; include entries have no target). See pyproject.toml.
+_PACKAGE_PARENT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_BUNDLED_TS_DIR = os.path.join(_PACKAGE_PARENT, "typescript")
+_BUNDLED_SRC_CLI = os.path.join(_BUNDLED_TS_DIR, "src", "cli.ts")
+_BUNDLED_DIST_CLI = os.path.join(_BUNDLED_TS_DIR, "dist", "cli.js")
+
 
 class TSEngineUnavailable(RuntimeError):
     """Raised when the TS engine cannot be located or started."""
@@ -46,15 +66,25 @@ def ts_command() -> List[str]:
     if override:
         return shlex.split(override)
     bun = shutil.which("bun")
+    if bun and os.path.exists(_BUNDLED_SRC_CLI):
+        return [bun, "run", _BUNDLED_SRC_CLI]
+    node = shutil.which("node")
+    if node and os.path.exists(_BUNDLED_DIST_CLI):
+        return [node, _BUNDLED_DIST_CLI]
     if bun and os.path.exists(_TS_SRC_CLI):
         return [bun, "run", _TS_SRC_CLI]
-    node = shutil.which("node")
     if node and os.path.exists(_TS_DIST_CLI):
         return [node, _TS_DIST_CLI]
+    npm_bin = shutil.which("pyscraper-md-ts")
+    if npm_bin:
+        return [npm_bin]
     raise TSEngineUnavailable(
-        "TypeScript engine is not available: install Bun (bun run "
-        "typescript/src/cli.ts) or build the package first "
-        "(cd typescript && npm run build) so typescript/dist/cli.js exists."
+        "TypeScript engine is not available: no bundled typescript/ tree "
+        "was found next to the md_scraper package, no repo checkout was "
+        "found, and no pyscraper-md-ts binary is on PATH. Install Bun "
+        "(then bun run typescript/src/cli.ts works), build the TS package "
+        "(cd typescript && npm run build) so typescript/dist/cli.js exists, "
+        "or install the published engine (npm install -g pyscraper-md-ts)."
     )
 
 
@@ -65,12 +95,24 @@ def run_ts_json(request: Dict[str, Any], timeout: int = 300) -> Dict[str, Any]:
     returns a JSON ``{"error": ...}`` object.
     """
     cmd = ts_command() + ["--json"]
+    # Node's fetch only honours proxy env vars when NODE_USE_ENV_PROXY=1
+    # and only trusts extra CAs via NODE_EXTRA_CA_CERTS (it ignores
+    # SSL_CERT_FILE, which Bun and curl/requests do honour). Default both
+    # from the ambient environment when running under Node so the Node
+    # path works wherever the Bun path does (e.g. a systemd service whose
+    # unit sets the proxy + SSL_CERT_FILE but not the Node-specific vars).
+    env = dict(os.environ)
+    if os.path.basename(cmd[0]) in ("node", "pyscraper-md-ts"):
+        env.setdefault("NODE_USE_ENV_PROXY", "1")
+        if "NODE_EXTRA_CA_CERTS" not in env and "SSL_CERT_FILE" in env:
+            env["NODE_EXTRA_CA_CERTS"] = env["SSL_CERT_FILE"]
     proc = subprocess.run(
         cmd,
         input=json.dumps(request),
         capture_output=True,
         text=True,
         timeout=timeout,
+        env=env,
     )
     try:
         data = json.loads(proc.stdout)

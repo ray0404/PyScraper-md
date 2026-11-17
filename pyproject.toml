@@ -24,7 +24,26 @@ dynamic = [
 
 [tool.poetry]
 packages = [
-    { include = "md_scraper", from = "src" }
+    { include = "md_scraper", from = "src" },
+]
+
+# Bundle the TypeScript engine in the wheel so engine="ts" works from a
+# wheel install (see md_scraper.ts_engine). Sources are always bundled;
+# dist/ only when built first (scripts/build-wheel.sh runs `npm run build`
+# in typescript/). Verified 2026-11-16 against poetry-core 2.x:
+# - `packages` entries cannot carry this tree: they require a `to` key
+#   (not `target`) AND the directory to contain a .py file
+#   ("X is not a package" otherwise).
+# - `include` entries have no target, so the tree lands at the wheel root
+#   (installed as site-packages/typescript/ next to md_scraper/).
+# - Explicit `include` entries are subtracted from the VCS-ignored set,
+#   so gitignored dist/ survives; node_modules/ is never listed here.
+# - Plain string includes default to sdist-only in poetry-core
+#   (Factory._prepare_formats default_formats=["sdist"]), so the format
+#   must be spelled out or the wheel gets nothing.
+include = [
+    { path = "typescript/src", format = ["sdist", "wheel"] },
+    { path = "typescript/dist", format = ["sdist", "wheel"] },
 ]
 
 [tool.poetry.scripts]

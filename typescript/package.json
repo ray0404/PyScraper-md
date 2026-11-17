@@ -31,5 +31,9 @@
     "node": ">=20",
     "bun": ">=1.0"
   },
-  "license": "MIT"
+  "license": "MIT",
+  "files": [
+    "dist",
+    "README.md"
+  ]
 }

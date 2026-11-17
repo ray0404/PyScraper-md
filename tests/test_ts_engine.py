@@ -37,12 +37,54 @@ def test_ts_command_env_override(monkeypatch):
     assert ts_command() == ["bun", "run", "/somewhere/cli.ts"]
 
 
-def test_ts_command_prefers_bun_src(monkeypatch):
+def test_ts_command_prefers_bundled_bun_src(monkeypatch):
+    """Bundled src (wheel) wins over the checkout copy when both exist."""
     monkeypatch.delenv("PYSCRAPER_TS_CMD", raising=False)
     monkeypatch.setattr(ts_engine.shutil, "which",
                         lambda name: "/usr/bin/bun" if name == "bun" else None)
     monkeypatch.setattr(ts_engine.os.path, "exists", lambda p: True)
+    assert ts_command() == ["/usr/bin/bun", "run", ts_engine._BUNDLED_SRC_CLI]
+
+
+def test_ts_command_checkout_src_when_no_bundled(monkeypatch):
+    monkeypatch.delenv("PYSCRAPER_TS_CMD", raising=False)
+    monkeypatch.setattr(ts_engine.shutil, "which",
+                        lambda name: "/usr/bin/bun" if name == "bun" else None)
+    monkeypatch.setattr(ts_engine.os.path, "exists",
+                        lambda p: p == ts_engine._TS_SRC_CLI)
     assert ts_command() == ["/usr/bin/bun", "run", ts_engine._TS_SRC_CLI]
+
+
+def test_ts_command_prefers_bundled_dist(monkeypatch):
+    """Bundled dist wins over checkout dist when bun is unavailable."""
+    monkeypatch.delenv("PYSCRAPER_TS_CMD", raising=False)
+    monkeypatch.setattr(ts_engine.shutil, "which",
+                        lambda name: "/usr/bin/node" if name == "node" else None)
+    monkeypatch.setattr(
+        ts_engine.os.path, "exists",
+        lambda p: p in (ts_engine._BUNDLED_DIST_CLI, ts_engine._TS_DIST_CLI))
+    assert ts_command() == ["/usr/bin/node", ts_engine._BUNDLED_DIST_CLI]
+
+
+def test_ts_command_npm_bin_fallback(monkeypatch):
+    """A globally installed pyscraper-md-ts binary is the last resort."""
+    monkeypatch.delenv("PYSCRAPER_TS_CMD", raising=False)
+    monkeypatch.setattr(
+        ts_engine.shutil, "which",
+        lambda name: ("/usr/local/bin/pyscraper-md-ts"
+                      if name == "pyscraper-md-ts" else None))
+    monkeypatch.setattr(ts_engine.os.path, "exists", lambda p: False)
+    assert ts_command() == ["/usr/local/bin/pyscraper-md-ts"]
+
+
+def test_ts_command_unavailable_names_what_is_missing(monkeypatch):
+    monkeypatch.delenv("PYSCRAPER_TS_CMD", raising=False)
+    monkeypatch.setattr(ts_engine.shutil, "which", lambda name: None)
+    monkeypatch.setattr(ts_engine.os.path, "exists", lambda p: False)
+    with pytest.raises(TSEngineUnavailable) as excinfo:
+        ts_command()
+    assert "pyscraper-md-ts" in str(excinfo.value)
+    assert "Bun" in str(excinfo.value)
 
 
 def test_ts_command_falls_back_to_node_dist(monkeypatch):
@@ -98,6 +140,42 @@ def test_run_ts_json_error_key(monkeypatch):
     _fake_run(monkeypatch, '{"error": "fetch failed"}')
     with pytest.raises(RuntimeError, match="fetch failed"):
         run_ts_json({"op": "scrape", "url": "https://example.com"})
+
+
+def test_run_ts_json_node_env_defaults(monkeypatch):
+    """Under Node, the bridge defaults NODE_USE_ENV_PROXY and the CA bundle."""
+    monkeypatch.setattr(ts_engine, "ts_command", lambda: ["node", "dist/cli.js"])
+    monkeypatch.delenv("NODE_USE_ENV_PROXY", raising=False)
+    monkeypatch.delenv("NODE_EXTRA_CA_CERTS", raising=False)
+    monkeypatch.setenv("SSL_CERT_FILE", "/etc/ssl/ca-bundle.pem")
+    captured = {}
+
+    def _fake(*args, **kwargs):
+        captured["env"] = kwargs.get("env")
+        return SimpleNamespace(returncode=0, stdout='{"markdown": "# Hi"}',
+                               stderr="")
+
+    monkeypatch.setattr(ts_engine.subprocess, "run", _fake)
+    run_ts_json({"op": "scrape", "url": "https://example.com"})
+    assert captured["env"]["NODE_USE_ENV_PROXY"] == "1"
+    assert captured["env"]["NODE_EXTRA_CA_CERTS"] == "/etc/ssl/ca-bundle.pem"
+
+
+def test_run_ts_json_bun_env_untouched(monkeypatch):
+    """Under Bun the bridge does not inject Node-specific variables."""
+    monkeypatch.setattr(ts_engine, "ts_command",
+                        lambda: ["bun", "run", "cli.ts"])
+    monkeypatch.delenv("NODE_USE_ENV_PROXY", raising=False)
+    captured = {}
+
+    def _fake(*args, **kwargs):
+        captured["env"] = kwargs.get("env")
+        return SimpleNamespace(returncode=0, stdout='{"markdown": "# Hi"}',
+                               stderr="")
+
+    monkeypatch.setattr(ts_engine.subprocess, "run", _fake)
+    run_ts_json({"op": "scrape", "url": "https://example.com"})
+    assert "NODE_USE_ENV_PROXY" not in captured["env"]
 
 
 # ---------------------------------------------------------------------------

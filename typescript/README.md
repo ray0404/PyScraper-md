@@ -190,14 +190,71 @@ know about Flask:
 
 * `src/md_scraper/ts_engine.py` — `scrape_ts()` / `crawl_ts()` /
   `wrap_ts()` / `content_html_ts()`, plus `ts_command()` (locates the
-  CLI: `PYSCRAPER_TS_CMD` env override, else `bun run src/cli.ts`,
-  else `node dist/cli.js`).
+  CLI, first match wins: `PYSCRAPER_TS_CMD` env override; the copy
+  bundled in the wheel at `site-packages/typescript/` — `src/cli.ts` +
+  Bun, then `dist/cli.js` + Node; a repo checkout's `typescript/` —
+  same order; finally a globally installed `pyscraper-md-ts` binary
+  on PATH). Under Node it defaults `NODE_USE_ENV_PROXY=1` and
+  `NODE_EXTRA_CA_CERTS` from `SSL_CERT_FILE`, because Node's fetch
+  ignores both by default.
 * Python CLI: `scraper scrape URL --engine ts` (default `python`).
   With `--server`, the engine choice is sent to the server.
 * Flask: `POST /api/scrape` accepts `engine: "python" | "ts"`
   (default `"python"`); `/api/download-zip` accepts the same field and
   rebuilds missing `html` / `html_document` with the TS engine. The
   web UI has an Engine dropdown.
+
+## Packaging
+
+### Inside the Python wheel
+
+`pyproject.toml` declares `[tool.poetry] include` entries for
+`typescript/src/` and `typescript/dist/` (explicit
+`format = ["sdist", "wheel"]`). The tree lands at the wheel root,
+installed as `site-packages/typescript/` next to `md_scraper/`.
+Build a release wheel with `./scripts/build-wheel.sh` from the repo
+root — it runs `npm run build` in `typescript/` first, then
+`python -m build --wheel` (creating a throwaway venv for the `build`
+package if no Python has it; falling back to `poetry build`), verifies
+the wheel contains `typescript/src/cli.ts` and
+`typescript/dist/cli.js`, and prints the wheel path.
+
+Why the script exists instead of a build hook: poetry-core has no
+build hooks, so `tsc` cannot run inside `poetry build`, and wheels
+run no code at install time, so `dist/` cannot be built on install —
+it must be built at packaging time. Two poetry-core facts that shaped
+the `pyproject.toml` (verified by building wheels): `packages`
+entries need a `to` key (not `target`) and a `.py` file in the
+directory, so they cannot carry this tree; plain string `include`
+entries default to sdist-only, so the format must be spelled out.
+`engine="ts"` from a wheel install still needs Bun or Node on PATH
+at runtime. A future alternative is switching the build backend to
+hatchling, which supports custom build hooks that could run `tsc`
+during the wheel build — a backend migration, deliberately not done
+here.
+
+### As its own npm package
+
+This folder is the publishable package `pyscraper-md-ts` (name free
+on the registry as of 2026-11-16). `package.json` has a
+`"files": ["dist", "README.md"]` allowlist — without it, gitignored
+`dist/` would be left out of the tarball even though `main` and `bin`
+point at it. Only `dist/` (compiled JS + types) is published, not
+`src/`; the package stays dependency-free apart from optional
+`playwright` (dynamic mode only). There is no `LICENSE` file in this
+repo, so none is listed in `files` (the `license` field says MIT).
+
+```bash
+cd typescript
+npm run build
+npm pack --dry-run      # check the file list: dist/ + README.md + package.json
+npm publish --dry-run   # validates without publishing
+npm publish             # the real thing — needs an npm login
+```
+
+The published `bin` is `pyscraper-md-ts` (`dist/cli.js`); the Python
+bridge uses it as its last-resort lookup when no bundled copy or repo
+checkout is available.
 
 ## Known limits
 
@@ -210,5 +267,11 @@ know about Flask:
   on a slow VM a small JS page can take ~40 s, and HTTPS `CONNECT`
   through a loopback relay can be flaky for some hosts — prefer `http`
   for the dynamic smoke test.
+* `engine="ts"` from Python needs Bun or Node on PATH at runtime.
+  Under Node, fetching through a proxy needs `NODE_USE_ENV_PROXY=1`
+  and the MITM CA via `NODE_EXTRA_CA_CERTS` — the bridge defaults
+  both (the latter from `SSL_CERT_FILE`) when it spawns Node, so a
+  plain `node dist/cli.js` invocation in a proxied environment may
+  still fail where `bun run src/cli.ts` works.
 * No `scraper-go.sh` equivalent; no Docker image of its own — the TS
   package is a library/CLI inside this repo, not a separate service.

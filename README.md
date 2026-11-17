@@ -302,6 +302,23 @@ The Python side reaches it through `src/md_scraper/ts_engine.py`
 [`typescript/README.md`](typescript/README.md) for setup, library
 usage, the `--json` contract, and the parity table.
 
+### Packaging the TypeScript engine
+
+The TS engine ships two ways:
+
+* **Inside the Python wheel.** `pyproject.toml` bundles
+  `typescript/src/` (always) and the built `typescript/dist/` into the
+  wheel, installed as `site-packages/typescript/` next to `md_scraper/`.
+  Build a release wheel with `./scripts/build-wheel.sh` (builds the TS
+  package first, then the wheel). `dist/` is built at packaging time
+  because poetry-core has no build hooks and wheels run no code at
+  install time. `engine="ts"` still needs Bun or Node on PATH at
+  runtime — Poetry cannot install a JavaScript runtime.
+* **As its own npm package** (`pyscraper-md-ts`, see
+  [`typescript/README.md`](typescript/README.md)). The Python bridge
+  falls back to a globally installed `pyscraper-md-ts` binary when
+  neither a bundled copy nor a repo checkout is available.
+
 ## 🐳 Docker Support
 
 Isolate the environment with Docker.
